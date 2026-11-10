@@ -1,6 +1,5 @@
--- // MEOWMOD | V44.0 FINAL // Monolithic build
--- Load via loadstring(raw.github...)() or paste into Delta directly.
--- ESP, AI v10, aim v4, bypass v10, teleport v5, UI v4, logs v4.
+-- // MEOWMOD | V1.5 // Airdrop no-Y-gate + Crashed UAV TP
+-- Airdrop: keyword-first, Y only as tiebreaker. UAV: keyword match.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -15,20 +14,17 @@ local Camera = WS.CurrentCamera
 local PG = LP:WaitForChild("PlayerGui")
 
 -- ═══════════════ CONFIG ═══════════════
-local CONFIG_PATH = "MeowMod_V44.json"
+local CONFIG_PATH = "MeowMod_V1.json"
 local function HasFS() return typeof(writefile) == "function" and typeof(readfile) == "function" end
 
 local DefaultConfig = {
-    Aimbot = false, SilentAim = false,
-    AimKey = Enum.UserInputType.MouseButton2,
+    SilentAim = false,
     FOV = 260, MaxDistance = 5000,
     StrictFOV = true,
-    Smoothness = 0.22, PredictionMultiplier = 1.0,
-    SmartTarget = false, TargetLock = false,
+    PredictionMultiplier = 1.0,
     Headshot = false, WallCheck = false,
-    Bypass = false, ShowFOV = false, DynamicFOV = false,
-    AdaptiveFOV = false, SnapClose = false,
     TeamFilter = "all",
+    Bypass = false,
     ESP = false, ESP_Line = false, ESP_Box = false,
     ESP_Name = false, ESP_Dist = false, ESP_HP = false,
     ESP_Skeleton = false, ESP_Offscreen = false, ESP_DistBar = false,
@@ -37,30 +33,18 @@ local DefaultConfig = {
     HitboxExpander = false, HitboxSize = 6,
     Crosshair = false, CH_Size = 12,
     TP_PlayerOffset = 5, TP_SafeDrop = 4,
-    TP_CaptureKeywords = {"capture","flag","zone","point","control","objective","flagzone","controlpoint","cap"},
-    TP_CaptureBlacklist = {"airdroppad","airdropp","cargo","planecrate","plane","vehicle","seat","heli","air","cargo","table","chair","desk","bunker","gui","menu","decor","furniture","props","minimap","interior","spawnpoint"},
     ColorNeon = Color3.fromRGB(0, 240, 255),
     ColorBg = Color3.fromRGB(10, 10, 14),
     ColorPanel = Color3.fromRGB(18, 18, 24),
     ColorVehicle = Color3.fromRGB(255, 165, 0),
 }
 local Config = {}
-for k, v in pairs(DefaultConfig) do
-    if type(v) == "table" then
-        local c = {}
-        for i, vv in ipairs(v) do c[i] = vv end
-        Config[k] = c
-    else Config[k] = v end
-end
+for k, v in pairs(DefaultConfig) do Config[k] = v end
 
 local function SerializeConfig()
     local t = {}
     for k, v in pairs(Config) do
         if typeof(v) == "Color3" then t[k] = {"__c3", v.R, v.G, v.B}
-        elseif type(v) == "table" then
-            local arr = {"__arr"}
-            for i, vv in ipairs(v) do table.insert(arr, vv) end
-            t[k] = arr
         elseif type(v) == "boolean" or type(v) == "number" or type(v) == "string" then t[k] = v end
     end
     return t
@@ -68,23 +52,18 @@ end
 local function DeserializeConfig(t)
     for k, v in pairs(t) do
         if type(v) == "table" and v[1] == "__c3" then Config[k] = Color3.new(v[2], v[3], v[4])
-        elseif type(v) == "table" and v[1] == "__arr" then
-            local arr = {}
-            for i = 2, #v do table.insert(arr, v[i]) end
-            Config[k] = arr
         elseif type(v) == "boolean" or type(v) == "number" or type(v) == "string" then Config[k] = v end
     end
 end
 local function LoadConfig()
-    if not HasFS() then return false end
+    if not HasFS() then return end
     local ok, data = pcall(function()
         if not isfile(CONFIG_PATH) then return nil end
         return readfile(CONFIG_PATH)
     end)
-    if not ok or not data or data == "" then return false end
+    if not ok or not data or data == "" then return end
     local ok2, parsed = pcall(function() return Http:JSONDecode(data) end)
-    if ok2 and parsed then DeserializeConfig(parsed); return true end
-    return false
+    if ok2 and parsed then DeserializeConfig(parsed) end
 end
 local function SaveConfig()
     if not HasFS() then return false end
@@ -92,27 +71,25 @@ local function SaveConfig()
 end
 LoadConfig()
 
--- ═══════════════ LOGGER v4 ═══════════════
+-- ═══════════════ LOGGER ═══════════════
 local ErrorLogs = {}
 local LogBox = nil
 local LogFilter = "all"
 local LogCounters = {}
 local LogChipLabels = {}
-local MaxLogs = 500
 local LOG_COLORS = {
     AIM = Color3.fromRGB(255,100,100), ESP = Color3.fromRGB(100,200,255),
     VEH = Color3.fromRGB(255,165,0), AI = Color3.fromRGB(180,120,255),
     TP = Color3.fromRGB(120,255,180), CONFIG = Color3.fromRGB(0,240,200),
-    CORE = Color3.fromRGB(255,80,80), SYS = Color3.fromRGB(255,200,50),
-    PERF = Color3.fromRGB(255,120,200),
+    SYS = Color3.fromRGB(255,200,50),
 }
 local function LogColor(cat) return LOG_COLORS[cat] or Color3.fromRGB(200,200,200) end
 
 local function LogError(msg, cat)
     cat = cat or "SYS"
     local line = "["..os.date("%H:%M:%S").."] ["..cat.."] "..tostring(msg)
-    table.insert(ErrorLogs, {text = line, cat = cat, ts = tick()})
-    while #ErrorLogs > MaxLogs do table.remove(ErrorLogs, 1) end
+    table.insert(ErrorLogs, {text = line, cat = cat})
+    while #ErrorLogs > 400 do table.remove(ErrorLogs, 1) end
     LogCounters[cat] = (LogCounters[cat] or 0) + 1
     if LogChipLabels[cat] then LogChipLabels[cat].Text = cat..": "..LogCounters[cat] end
     if LogBox then
@@ -125,11 +102,6 @@ local function LogError(msg, cat)
             tl.Font = Enum.Font.Code
             tl.TextColor3 = LogColor(cat)
             tl.Parent = LogBox
-            if LogBox.CanvasPosition.Y >= LogBox.AbsoluteCanvasSize.Y - 200 then
-                task.defer(function()
-                    pcall(function() LogBox.CanvasPosition = Vector2.new(0, LogBox.AbsoluteCanvasSize.Y) end)
-                end)
-            end
         end)
     end
 end
@@ -141,21 +113,18 @@ local function RebuildLogs()
     end
     for _, e in ipairs(ErrorLogs) do
         if LogFilter == "all" or LogFilter == e.cat then
-            pcall(function()
-                local tl = Instance.new("TextLabel")
-                tl.Size = UDim2.new(1,0,0,18); tl.BackgroundTransparency = 1
-                tl.Text = e.text; tl.TextSize = 11
-                tl.TextXAlignment = Enum.TextXAlignment.Left
-                tl.Font = Enum.Font.Code
-                tl.TextColor3 = LogColor(e.cat)
-                tl.Parent = LogBox
-            end)
+            local tl = Instance.new("TextLabel")
+            tl.Size = UDim2.new(1,0,0,18); tl.BackgroundTransparency = 1
+            tl.Text = e.text; tl.TextSize = 11
+            tl.TextXAlignment = Enum.TextXAlignment.Left
+            tl.Font = Enum.Font.Code
+            tl.TextColor3 = LogColor(e.cat)
+            tl.Parent = LogBox
         end
     end
 end
 
 if PG:FindFirstChild("MeowMod") then PG.MeowMod:Destroy() end
-if PG:FindFirstChild("MeowESP") then PG.MeowESP:Destroy() end
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MeowMod"
@@ -167,7 +136,7 @@ local Connections, Drawings = {}, {}
 local function AddConn(c) table.insert(Connections, c) end
 local function AddDraw(d) table.insert(Drawings, d) end
 
--- ═══════════════ UI v4 ═══════════════
+-- ═══════════════ UI ═══════════════
 local Main = Instance.new("Frame")
 Main.Size = UDim2.new(0, 720, 0, 560)
 Main.Position = UDim2.new(0.5, -360, 0.5, -280)
@@ -185,22 +154,14 @@ Header.Size = UDim2.new(1, 0, 0, 64)
 Header.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
 Header.BackgroundTransparency = 0.05
 Header.BorderSizePixel = 0
-Header.ClipsDescendants = true
 Header.Parent = Main
 Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 16)
-local HGrad = Instance.new("UIGradient", Header)
-HGrad.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(30,30,45)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(22,22,32)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(30,30,45))
-}
-HGrad.Rotation = 15
 
 local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, -320, 1, 0)
+TitleLabel.Size = UDim2.new(1, -300, 1, 0)
 TitleLabel.Position = UDim2.new(0, 20, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "MEOW | V44.0"
+TitleLabel.Text = "MEOW | V1.5"
 TitleLabel.TextColor3 = Config.ColorNeon
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Font = Enum.Font.GothamBlack
@@ -209,7 +170,7 @@ TitleLabel.Parent = Header
 
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(0, 120, 0, 34)
-StatusLabel.Position = UDim2.new(1, -250, 0, 15)
+StatusLabel.Position = UDim2.new(1, -210, 0, 15)
 StatusLabel.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
 StatusLabel.BackgroundTransparency = 0.4
 StatusLabel.Text = "AI: READY"
@@ -220,8 +181,8 @@ StatusLabel.Parent = Header
 Instance.new("UICorner", StatusLabel).CornerRadius = UDim.new(0, 8)
 
 local PerfLabel = Instance.new("TextLabel")
-PerfLabel.Size = UDim2.new(0, 120, 0, 34)
-PerfLabel.Position = UDim2.new(1, -380, 0, 15)
+PerfLabel.Size = UDim2.new(0, 100, 0, 34)
+PerfLabel.Position = UDim2.new(1, -320, 0, 15)
 PerfLabel.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
 PerfLabel.BackgroundTransparency = 0.4
 PerfLabel.Text = "FPS: --"
@@ -260,7 +221,6 @@ TL.Padding = UDim.new(0, 8)
 TL.SortOrder = Enum.SortOrder.LayoutOrder
 
 local Pages = {}
-local ActiveTabBtn = nil
 local function CreateTab(name, order)
     local Btn = Instance.new("TextButton")
     Btn.Size = UDim2.new(0, 96, 1, 0)
@@ -284,7 +244,7 @@ local function CreateTab(name, order)
     Instance.new("UICorner", Ind).CornerRadius = UDim.new(1, 0)
 
     local Page = Instance.new("ScrollingFrame")
-    Page.Size = UDim2.new(0, 490, 1, -140)
+    Page.Size = UDim2.new(1, -40, 1, -140)
     Page.Position = UDim2.new(0, 20, 0, 124)
     Page.BackgroundTransparency = 1
     Page.Visible = false
@@ -292,7 +252,6 @@ local function CreateTab(name, order)
     Page.AutomaticCanvasSize = Enum.AutomaticSize.Y
     Page.ScrollBarThickness = 3
     Page.ScrollBarImageColor3 = Config.ColorNeon
-    Page.ScrollingDirection = Enum.ScrollingDirection.Y
     Page.Parent = Main
     local L = Instance.new("UIListLayout", Page)
     L.Padding = UDim.new(0, 8)
@@ -315,19 +274,14 @@ local function CreateTab(name, order)
         Btn.BackgroundTransparency = 0
         Btn.TextColor3 = Color3.fromRGB(0,0,0)
         Ind.Visible = true
-        ActiveTabBtn = Btn
     end)
 end
 
-local function Save()
-    if SaveConfig() then LogError("Config saved", "CONFIG")
-    else LogError("Config save failed (no fs)", "CONFIG") end
-end
 local SaveDebounce = 0
 local function QueueSave()
     SaveDebounce = SaveDebounce + 1
     local myId = SaveDebounce
-    task.delay(0.5, function() if myId == SaveDebounce then Save() end end)
+    task.delay(0.5, function() if myId == SaveDebounce then SaveConfig() end end)
 end
 
 local function CreateToggle(parent, name, def, cb, cfgKey)
@@ -363,14 +317,6 @@ local function CreateToggle(parent, name, def, cb, cfgKey)
     Circ.Parent = Ind
     Instance.new("UICorner", Circ).CornerRadius = UDim.new(1, 0)
     local State = def
-    Btn.MouseEnter:Connect(function()
-        TweenService:Create(Btn, TweenInfo.new(0.12), {BackgroundTransparency = 0.15}):Play()
-        st.Transparency = 0.15
-    end)
-    Btn.MouseLeave:Connect(function()
-        TweenService:Create(Btn, TweenInfo.new(0.12), {BackgroundTransparency = 0.35}):Play()
-        st.Transparency = 0.4
-    end)
     AddConn(Btn.MouseButton1Click:Connect(function()
         State = not State
         TweenService:Create(Ind, TweenInfo.new(0.15), {
@@ -455,20 +401,10 @@ local function CreateButton(parent, name, cb)
     Btn.AutoButtonColor = false
     Btn.Parent = parent
     Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 10)
-    local st = Instance.new("UIStroke", Btn)
-    st.Color = Config.ColorNeon; st.Thickness = 1; st.Transparency = 0.75
-    Btn.MouseEnter:Connect(function()
-        TweenService:Create(Btn, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(40,40,60)}):Play()
-        st.Transparency = 0.3
-    end)
-    Btn.MouseLeave:Connect(function()
-        TweenService:Create(Btn, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(30,30,45)}):Play()
-        st.Transparency = 0.75
-    end)
     Btn.MouseButton1Click:Connect(function()
-        TweenService:Create(Btn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(0,255,150)}):Play()
+        Btn.BackgroundColor3 = Color3.fromRGB(0,255,150)
         task.wait(0.2)
-        TweenService:Create(Btn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(30,30,45)}):Play()
+        Btn.BackgroundColor3 = Color3.fromRGB(30,30,45)
         if cb then cb() end
     end)
 end
@@ -483,18 +419,8 @@ local function CreateCycle(parent, name, options, default, cb, cfgKey)
     Btn.AutoButtonColor = false
     Btn.Parent = parent
     Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 10)
-    local st = Instance.new("UIStroke", Btn)
-    st.Color = Config.ColorNeon; st.Thickness = 1; st.Transparency = 0.75
     local idx = 1
     for i, o in ipairs(options) do if o == default then idx = i break end end
-    Btn.MouseEnter:Connect(function()
-        TweenService:Create(Btn, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(40,40,60)}):Play()
-        st.Transparency = 0.3
-    end)
-    Btn.MouseLeave:Connect(function()
-        TweenService:Create(Btn, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(30,30,45)}):Play()
-        st.Transparency = 0.75
-    end)
     Btn.MouseButton1Click:Connect(function()
         idx = idx + 1; if idx > #options then idx = 1 end
         Btn.Text = name..": "..options[idx]
@@ -503,52 +429,6 @@ local function CreateCycle(parent, name, options, default, cb, cfgKey)
         QueueSave()
     end)
 end
-
--- Target HUD
-local TargetHUD = Instance.new("Frame")
-TargetHUD.Size = UDim2.new(0, 210, 0, 110)
-TargetHUD.Position = UDim2.new(1, -230, 0, 124)
-TargetHUD.BackgroundColor3 = Config.ColorPanel
-TargetHUD.BackgroundTransparency = 0.3
-TargetHUD.BorderSizePixel = 0
-TargetHUD.Parent = Main
-Instance.new("UICorner", TargetHUD).CornerRadius = UDim.new(0, 10)
-local THUD_Stroke = Instance.new("UIStroke", TargetHUD)
-THUD_Stroke.Color = Config.ColorNeon; THUD_Stroke.Thickness = 1; THUD_Stroke.Transparency = 0.5
-
-local THUD_Title = Instance.new("TextLabel")
-THUD_Title.Size = UDim2.new(1, -20, 0, 22)
-THUD_Title.Position = UDim2.new(0, 10, 0, 10)
-THUD_Title.BackgroundTransparency = 1
-THUD_Title.Text = "TARGET: NONE"
-THUD_Title.TextColor3 = Config.ColorNeon
-THUD_Title.Font = Enum.Font.GothamBold
-THUD_Title.TextSize = 12
-THUD_Title.TextXAlignment = Enum.TextXAlignment.Left
-THUD_Title.TextTruncate = Enum.TextTruncate.AtEnd
-THUD_Title.Parent = TargetHUD
-
-local THUD_HPBg = Instance.new("Frame")
-THUD_HPBg.Size = UDim2.new(1, -20, 0, 9)
-THUD_HPBg.Position = UDim2.new(0, 10, 0, 44)
-THUD_HPBg.BackgroundColor3 = Color3.fromRGB(40,40,50)
-THUD_HPBg.Parent = TargetHUD
-Instance.new("UICorner", THUD_HPBg).CornerRadius = UDim.new(0, 4)
-local THUD_HPFill = Instance.new("Frame")
-THUD_HPFill.Size = UDim2.new(1, 0, 1, 0)
-THUD_HPFill.BackgroundColor3 = Color3.fromRGB(0,255,140)
-THUD_HPFill.Parent = THUD_HPBg
-Instance.new("UICorner", THUD_HPFill).CornerRadius = UDim.new(0, 4)
-local THUD_Dist = Instance.new("TextLabel")
-THUD_Dist.Size = UDim2.new(1, -20, 0, 22)
-THUD_Dist.Position = UDim2.new(0, 10, 0, 62)
-THUD_Dist.BackgroundTransparency = 1
-THUD_Dist.Text = "DIST: --"
-THUD_Dist.TextColor3 = Color3.fromRGB(200,200,200)
-THUD_Dist.Font = Enum.Font.GothamMedium
-THUD_Dist.TextSize = 12
-THUD_Dist.TextXAlignment = Enum.TextXAlignment.Left
-THUD_Dist.Parent = TargetHUD
 
 CreateTab("Combat", 1); CreateTab("Visuals", 2); CreateTab("Players", 3)
 CreateTab("Vehicles", 4); CreateTab("Teleport", 5); CreateTab("Logs", 6)
@@ -566,7 +446,7 @@ task.spawn(function()
     end
 end)
 
--- ═══════════════ TELEPORT v5 ═══════════════
+-- ═══════════════ TELEPORT v6 — AIRDROP NO Y-GATE + UAV ═══════════════
 local function SafeTeleport(pos, label)
     local c = LP.Character
     local hrp = c and c:FindFirstChild("HumanoidRootPart")
@@ -580,159 +460,199 @@ local function SafeTeleport(pos, label)
     return true
 end
 
--- v5: keyword по ИМЕНИ, blacklist по полному пути, whitelist по маркерам,
--- score учитывает размер/контекст/близость, топ-3 логируется.
-local function FindCandidates(keyword, blacklist, whitelist)
-    local kwLow = keyword:lower()
-    local out = {}
+local function TPBase()
+    local myTeam = LP.Team and LP.Team.Name:lower() or ""
+    local myColor = LP.TeamColor and LP.TeamColor.Color or nil
+    local best, bestDist = nil, math.huge
     local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
     local myPos = myHrp and myHrp.Position or Vector3.zero
-
     for _, o in pairs(WS:GetDescendants()) do
-        if o and (o:IsA("BasePart") or o:IsA("Model")) and o.Name:lower():find(kwLow) then
-            local chain = {}
-            local parent = o
-            while parent and parent ~= WS do
-                table.insert(chain, parent.Name:lower())
-                parent = parent.Parent
+        if o:IsA("SpawnLocation") and o.Enabled then
+            local matches = false
+            if myColor and o.BrickColor.Color == myColor then matches = true end
+            if not matches and myTeam ~= "" then
+                local path = o:GetFullName():lower()
+                if path:find(myTeam) then matches = true end
             end
-            local chainStr = table.concat(chain, "/")
-
-            local isBlack = false
-            for _, b in ipairs(blacklist or {}) do
-                if chainStr:find(b:lower()) then isBlack = true break end
-            end
-
-            if not isBlack then
-                local isWhite = true
-                if whitelist and #whitelist > 0 then
-                    isWhite = false
-                    for _, w in ipairs(whitelist) do
-                        if chainStr:find(w:lower()) then isWhite = true break end
-                    end
-                end
-                if isWhite then
-                    local p, size
-                    if o:IsA("BasePart") then p = o.Position; size = o.Size.Magnitude
-                    else
-                        local pr = o.PrimaryPart or o:FindFirstChildWhichIsA("BasePart")
-                        if pr then p = pr.Position; size = pr.Size.Magnitude end
-                    end
-                    if p then
-                        local score = 1000
-                        if o.Name:lower() == kwLow then score = score + 200 end
-                        if chainStr:find("capturepoint") then score = score + 250 end
-                        if chainStr:find("capture") and not chainStr:find("capturetable") then score = score + 150 end
-                        if chainStr:find("objective") then score = score + 120 end
-                        if chainStr:find("flag") then score = score + 100 end
-                        if chainStr:find("zone") then score = score + 80 end
-                        if chainStr:find("trigger") then score = score + 60 end
-                        if chainStr:find("control") then score = score + 60 end
-                        if chainStr:find("decor") then score = score - 300 end
-                        if chainStr:find("furniture") then score = score - 400 end
-                        if chainStr:find("props") then score = score - 200 end
-                        if chainStr:find("table") then score = score - 500 end
-                        if chainStr:find("chair") then score = score - 500 end
-                        if chainStr:find("bunker") then score = score - 400 end
-                        if chainStr:find("minimap") then score = score - 500 end
-                        if chainStr:find("interior") then score = score - 200 end
-                        if chainStr:find("spawn") then score = score - 200 end
-                        local dist = (myPos - p).Magnitude
-                        score = score - math.min(dist * 0.05, 200)
-                        if size and size > 5 then score = score + 50 end
-                        if size and size > 15 then score = score + 50 end
-                        table.insert(out, {part = o, pos = p, score = score, name = chainStr, dist = dist})
-                    end
-                end
+            if not matches and o.Neutral and myTeam == "" then matches = true end
+            if matches then
+                local d = (myPos - o.Position).Magnitude
+                if d < bestDist then bestDist = d; best = {pos = o.Position, name = o:GetFullName()} end
             end
         end
     end
-    table.sort(out, function(a, b) return a.score > b.score end)
-    return out
-end
-
-local function TeleportSmart(keyword, blacklist, whitelist)
-    local candidates = FindCandidates(keyword, blacklist, whitelist)
-    if #candidates == 0 then
-        LogError("TP '"..keyword.."': no candidates", "TP")
-        return false
-    end
-    local pick = candidates[1]
-    local top3 = ""
-    for i = 1, math.min(3, #candidates) do
-        top3 = top3.." | "..candidates[i].name.." ("..math.floor(candidates[i].score)..")"
-    end
-    return SafeTeleport(pick.pos, keyword.." -> "..pick.name.." [top:"..top3.."]")
-end
-
--- Fallback: raw find без whitelist (если whitelist всё отверг)
-local function RawTeleportKeyword(keyword, blacklist)
-    local kwLow = keyword:lower()
-    local best, bestD = nil, math.huge
-    local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    local myPos = myHrp and myHrp.Position or Vector3.zero
+    if best then return SafeTeleport(best.pos, "Base(spawn) -> "..best.name) end
+    local bestName, bestNameY = nil, -math.huge
     for _, o in pairs(WS:GetDescendants()) do
         if o and (o:IsA("BasePart") or o:IsA("Model")) then
             local n = o.Name:lower()
-            if n:find(kwLow) then
-                local chain = n
-                local pr = o.Parent
-                while pr and pr ~= WS do
-                    chain = chain.."/"..pr.Name:lower()
-                    pr = pr.Parent
-                end
-                local bad = false
-                for _, b in ipairs(blacklist or {}) do
-                    if chain:find(b:lower()) then bad = true break end
+            if n:find("base") or n:find("spawn") or n:find("barracks") or n:find("hq") then
+                local path = o:GetFullName():lower()
+                local bad = path:find("oil") or path:find("storage") or path:find("tank")
+                    or path:find("shop") or path:find("menu") or path:find("exchang")
+                    or path:find("airdrop") or path:find("cargo") or path:find("helicopter") or path:find("heli")
+                if not bad and myTeam ~= "" then
+                    if path:find("red") and not myTeam:find("red") then bad = true end
+                    if path:find("blue") and not myTeam:find("blue") then bad = true end
+                    if path:find("green") and not myTeam:find("green") then bad = true end
+                    if path:find("yellow") and not myTeam:find("yellow") then bad = true end
                 end
                 if not bad then
                     local p
                     if o:IsA("BasePart") then p = o.Position
                     else
-                        local ppr = o.PrimaryPart or o:FindFirstChildWhichIsA("BasePart")
-                        if ppr then p = ppr.Position end
+                        local pr = o.PrimaryPart or o:FindFirstChildWhichIsA("BasePart")
+                        if pr then p = pr.Position end
+                    end
+                    if p and p.Y > bestNameY then bestNameY = p.Y; bestName = {pos = p, name = path} end
+                end
+            end
+        end
+    end
+    if bestName then return SafeTeleport(bestName.pos, "Base(name) -> "..bestName.name) end
+    LogError("Base not found (team="..myTeam..")", "TP")
+    return false
+end
+
+-- AIRDROP: keyword-first, без Y-gate. Y только как tiebreaker.
+-- Аирдроп = ящик с именем "airdrop", где бы он ни был — в воздухе или на земле.
+-- Нефть/хранилище/меню отсеиваем по blacklist.
+local function TPAirdrop()
+    local function FindFirst(keyword)
+        local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+        local myPos = myHrp and myHrp.Position or Vector3.zero
+        local best, bestScore = nil, -math.huge
+        for _, o in pairs(WS:GetDescendants()) do
+            if o and (o:IsA("BasePart") or o:IsA("Model")) then
+                local n = o.Name:lower()
+                if n:find(keyword) then
+                    local path = o:GetFullName():lower()
+                    local bad = path:find("menu") or path:find("exchang") or path:find("shop")
+                        or path:find("oil") or path:find("storage") or path:find("tank")
+                        or path:find("base") or path:find("spawn") or path:find("barracks")
+                        or path:find("table") or path:find("chair") or path:find("trade")
+                        or path:find("npc")
+                    if not bad then
+                        local p
+                        if o:IsA("BasePart") then p = o.Position
+                        else
+                            local pr = o.PrimaryPart or o:FindFirstChildWhichIsA("BasePart")
+                            if pr then p = pr.Position end
+                        end
+                        if p then
+                            -- score: точное "airdrop" в имени > crate > parachute.
+                            -- Y-высота — tiebreaker, а не фильтр.
+                            local score = 100
+                            if n == keyword then score = score + 200 end
+                            score = score + math.clamp(p.Y * 0.1, 0, 300)  -- высота = бонус
+                            score = score - math.clamp((myPos - p).Magnitude * 0.05, 0, 100)  -- близость = бонус
+                            if score > bestScore then bestScore = score; best = {pos = p, name = path} end
+                        end
+                    end
+                end
+            end
+        end
+        return best
+    end
+
+    local best = FindFirst("airdrop")
+    if best then return SafeTeleport(best.pos, "Airdrop(airdrop) -> "..best.name) end
+    best = FindFirst("crate")
+    if best then return SafeTeleport(best.pos, "Airdrop(crate) -> "..best.name) end
+    best = FindFirst("parachute")
+    if best then return SafeTeleport(best.pos, "Airdrop(parachute) -> "..best.name) end
+    LogError("Airdrop not found", "TP")
+    return false
+end
+
+-- Crashed UAV (разбитый БПЛА): дрон упал, значит на земле.
+-- Ключевые слова: uav, drone, crashed, wreck, enemyuav, recon.
+-- Отсеиваем: uavspawn, uavbase, uavpad, uavhangar (это спавны, не обломки).
+local function TPCrashedUAV()
+    local best, bestScore = nil, -math.huge
+    local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+    local myPos = myHrp and myHrp.Position or Vector3.zero
+    local keywords = {"uav","drone","crashed","wreck","recon","predator","reaper"}
+    for _, o in pairs(WS:GetDescendants()) do
+        if o and (o:IsA("BasePart") or o:IsA("Model")) then
+            local n = o.Name:lower()
+            local matched = false
+            for _, kw in ipairs(keywords) do
+                if n:find(kw) then matched = true; break end
+            end
+            if matched then
+                local path = o:GetFullName():lower()
+                -- Отсеиваем спавны/базы БПЛА, "enemy" (это живой дрон, не обломки)
+                local bad = path:find("spawn") or path:find("pad") or path:find("hangar")
+                    or path:find("base") or path:find("deploy") or path:find("launcher")
+                    or path:find("enemyuav") or path:find("airstrike")
+                if not bad then
+                    local p
+                    if o:IsA("BasePart") then p = o.Position
+                    else
+                        local pr = o.PrimaryPart or o:FindFirstChildWhichIsA("BasePart")
+                        if pr then p = pr.Position end
                     end
                     if p then
-                        local d = (myPos - p).Magnitude
-                        if d < bestD then bestD = d; best = {pos = p, name = chain} end
+                        local score = 100
+                        if n:find("crashed") then score = score + 300 end
+                        if n:find("wreck") then score = score + 300 end
+                        if n:find("uav") then score = score + 100 end
+                        if n:find("drone") then score = score + 100 end
+                        -- На земле — Y низкий относительно тебя
+                        if math.abs(p.Y - myPos.Y) < 50 then score = score + 50 end
+                        -- Ближе — предпочтительнее
+                        score = score - math.clamp((myPos - p).Magnitude * 0.05, 0, 100)
+                        if score > bestScore then bestScore = score; best = {pos = p, name = path} end
                     end
                 end
             end
         end
     end
-    if best then
-        return SafeTeleport(best.pos, keyword.." (raw) -> "..best.name)
-    end
-    LogError("TP '"..keyword.."' raw: not found", "TP")
+    if best then return SafeTeleport(best.pos, "UAV(crashed) -> "..best.name.." (score "..math.floor(bestScore)..")") end
+    LogError("Crashed UAV not found", "TP")
     return false
 end
 
--- Универсальный: сначала умный, если пусто — raw
-local function TeleportWithFallback(keyword, blacklist, whitelist)
-    local ok = TeleportSmart(keyword, blacklist, whitelist)
-    if not ok then
-        LogError("Smart TP failed for '"..keyword.."', trying raw...", "TP")
-        ok = RawTeleportKeyword(keyword, blacklist)
+local function TPCapture()
+    local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+    if not myHrp then return false end
+    local myPos = myHrp.Position
+    local best, bestScore = nil, -math.huge
+    for _, o in pairs(WS:GetDescendants()) do
+        if o and o:IsA("BasePart") then
+            local n = o.Name:lower()
+            local path = o:GetFullName():lower()
+            if n:find("flag") then
+                if o.Position.Y > myPos.Y + 3 then
+                    local bad = path:find("spawn") or path:find("base")
+                        or path:find("barracks") or path:find("oil")
+                        or path:find("storage") or path:find("tank")
+                        or path:find("menu") or path:find("exchang") or path:find("shop")
+                    if not bad then
+                        local score = 500
+                        if path:find("capture") then score = score + 200 end
+                        if path:find("zone") then score = score + 150 end
+                        if path:find("control") then score = score + 100 end
+                        if score > bestScore then bestScore = score; best = {pos = o.Position, name = path} end
+                    end
+                end
+            end
+        end
     end
-    return ok
+    if best then return SafeTeleport(best.pos, "Capture -> "..best.name) end
+    LogError("Capture flag not found", "TP")
+    return false
 end
 
 -- ═══════════════ UI CONTROLS ═══════════════
-CreateToggle(Pages["Combat"], "Aimbot (hold RMB)", Config.Aimbot, nil, "Aimbot")
 CreateToggle(Pages["Combat"], "Silent Aim", Config.SilentAim, nil, "SilentAim")
 CreateToggle(Pages["Combat"], "Strict FOV", Config.StrictFOV, nil, "StrictFOV")
-CreateToggle(Pages["Combat"], "Dynamic FOV", Config.DynamicFOV, nil, "DynamicFOV")
-CreateToggle(Pages["Combat"], "Adaptive FOV", Config.AdaptiveFOV, nil, "AdaptiveFOV")
-CreateToggle(Pages["Combat"], "Snap Close", Config.SnapClose, nil, "SnapClose")
-CreateToggle(Pages["Combat"], "Target Lock", Config.TargetLock, nil, "TargetLock")
 CreateToggle(Pages["Combat"], "Headshot", Config.Headshot, nil, "Headshot")
 CreateToggle(Pages["Combat"], "Wall Check", Config.WallCheck, nil, "WallCheck")
-CreateToggle(Pages["Combat"], "Smart Target", Config.SmartTarget, nil, "SmartTarget")
-CreateToggle(Pages["Combat"], "Bypass v10", Config.Bypass, nil, "Bypass")
-CreateToggle(Pages["Combat"], "Show FOV", Config.ShowFOV, nil, "ShowFOV")
+CreateToggle(Pages["Combat"], "Bypass v12", Config.Bypass, nil, "Bypass")
 CreateSlider(Pages["Combat"], "FOV", 50, 800, Config.FOV, nil, "FOV")
 CreateSlider(Pages["Combat"], "Max Dist", 500, 5000, Config.MaxDistance, nil, "MaxDistance")
-CreateSlider(Pages["Combat"], "Smooth x100", 5, 50, math.floor(Config.Smoothness*100), function(v) Config.Smoothness = v/100 end)
 CreateSlider(Pages["Combat"], "Prediction x10", 5, 30, math.floor(Config.PredictionMultiplier*10), function(v) Config.PredictionMultiplier = v/10 end)
 
 CreateToggle(Pages["Visuals"], "ESP", Config.ESP, nil, "ESP")
@@ -760,30 +680,25 @@ CreateSlider(Pages["Visuals"], "Hitbox Size", 2, 20, Config.HitboxSize, nil, "Hi
 CreateToggle(Pages["Visuals"], "Crosshair", Config.Crosshair, nil, "Crosshair")
 CreateSlider(Pages["Visuals"], "CH Size", 5, 30, Config.CH_Size, nil, "CH_Size")
 
-CreateToggle(Pages["Vehicles"], "Vehicle ESP", Config.V_ESP, nil, "V_ESP")
+CreateToggle(Pages["Vehicles"], "Vehicle ESP", Config.V_ESP, function(v)
+    Config.V_ESP = v
+    if not v then
+        for model, d in pairs(VehicleESP) do
+            if d.Box then pcall(function() d.Box.Visible = false end) end
+            if d.Name then pcall(function() d.Name.Visible = false end) end
+            if d.Dist then pcall(function() d.Dist.Visible = false end) end
+        end
+    end
+end, "V_ESP")
 CreateToggle(Pages["Vehicles"], " - Box", Config.V_ESP_Box, nil, "V_ESP_Box")
 CreateToggle(Pages["Vehicles"], " - Name", Config.V_ESP_Name, nil, "V_ESP_Name")
 CreateToggle(Pages["Vehicles"], " - Dist", Config.V_ESP_Dist, nil, "V_ESP_Dist")
 CreateSlider(Pages["Vehicles"], "Veh Max Dist", 100, 10000, Config.V_ESP_MaxDist, nil, "V_ESP_MaxDist")
 
-CreateButton(Pages["Teleport"], "TP Base", function()
-    TeleportWithFallback("Base",
-        {"Airdrop","Cargo","Spawn","Plane","Vehicle","Seat","Heli","Air","Bunker","Table","Chair"},
-        {"base","spawn","hq","barracks"})
-end)
-CreateButton(Pages["Teleport"], "TP Airdrop", function()
-    TeleportWithFallback("Airdrop",
-        {"Base","Cargo","Plane","Vehicle","Table","Chair","Bunker"},
-        {"airdrop","drop","crate","parachute"})
-end)
-CreateButton(Pages["Teleport"], "TP Capture Point", function()
-    -- v5: whitelist заменён на явный набор маркеров, fallback на raw
-    TeleportWithFallback("Capture",
-        {"airdroppad","airdropp","cargo","plane","vehicle","seat","heli","air",
-         "table","chair","desk","bunker","gui","menu","decor","furniture","props",
-         "minimap","interior","spawnpoint","airdrop"},
-        {"capture","flag","zone","point","trigger","objective","control","cap"})
-end)
+CreateButton(Pages["Teleport"], "TP Base", TPBase)
+CreateButton(Pages["Teleport"], "TP Airdrop", TPAirdrop)
+CreateButton(Pages["Teleport"], "TP Crashed UAV", TPCrashedUAV)
+CreateButton(Pages["Teleport"], "TP Capture Point", TPCapture)
 CreateButton(Pages["Teleport"], "TP Nearest Enemy", function()
     local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
     if not myHrp then return end
@@ -804,15 +719,6 @@ CreateButton(Pages["Teleport"], "TP Nearest Enemy", function()
     if best then SafeTeleport(best.Position + Vector3.new(0, 3, 0), "nearest enemy @ "..math.floor(bestD).."m")
     else LogError("No enemy", "TP") end
 end)
-CreateButton(Pages["Teleport"], "TP Scan Capture (debug)", function()
-    local cands = FindCandidates("Capture",
-        {"airdroppad","cargo","plane","vehicle","seat","heli","air","table","chair","desk","bunker"},
-        {"capture","flag","zone","point","trigger","objective","control","cap"})
-    LogError("Scan Capture: "..#cands.." candidates found", "TP")
-    for i = 1, math.min(10, #cands) do
-        LogError("  "..i..". "..cands[i].name.." (score "..math.floor(cands[i].score)..", dist "..math.floor(cands[i].dist).."m)", "TP")
-    end
-end)
 
 -- ═══════════════ UTIL ═══════════════
 local function DistToColor(d)
@@ -832,99 +738,46 @@ local function PassesTeamFilter(p)
     return true
 end
 
--- ═══════════════ LOCK TARGET ═══════════════
-local ForcedTarget = nil
-local function SetForcedTarget(p)
-    if ForcedTarget == p then ForcedTarget = nil; LogError("Lock released", "AI")
-    else ForcedTarget = p; LogError("Locked -> "..tostring(p and p.Name or "nil"), "AI") end
-end
-
--- ═══════════════ PLAYER LIST v2 ═══════════════
+-- ═══════════════ PLAYER LIST ═══════════════
 local PL = Instance.new("UIListLayout", Pages["Players"])
 PL.Padding = UDim.new(0, 6)
 local function UpdatePlayerList()
+    for _, v in pairs(Pages["Players"]:GetChildren()) do
+        if v:IsA("TextButton") then v:Destroy() end
+    end
     local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    local seen = {}
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LP and p.Character and PassesTeamFilter(p) then
             local hrp = p.Character:FindFirstChild("HumanoidRootPart")
             local hum = p.Character:FindFirstChildOfClass("Humanoid")
             if hrp and hum and hum.Health > 0 then
-                seen[p] = true
                 local d = myHrp and math.floor((myHrp.Position - hrp.Position).Magnitude) or 0
-                local Row = Pages["Players"]:FindFirstChild(tostring(p.UserId))
-                local isNew = false
-                if not Row or not Row:IsA("Frame") then
-                    Row = Instance.new("Frame")
-                    Row.Name = tostring(p.UserId)
-                    Row:SetAttribute("isPlayer", true)
-                    Row.Size = UDim2.new(1, 0, 0, 36)
-                    Row.Parent = Pages["Players"]
-                    Instance.new("UICorner", Row).CornerRadius = UDim.new(0, 8)
-                    isNew = true
-                end
-                Row.BackgroundColor3 = (ForcedTarget == p) and Color3.fromRGB(60,40,90) or Config.ColorPanel
-                Row.BackgroundTransparency = 0.3
-                if isNew then
-                    local NameBtn = Instance.new("TextButton")
-                    NameBtn.Name = "NameBtn"
-                    NameBtn.Size = UDim2.new(1, -70, 1, 0)
-                    NameBtn.BackgroundTransparency = 1
-                    NameBtn.TextXAlignment = Enum.TextXAlignment.Left
-                    NameBtn.Font = Enum.Font.GothamMedium
-                    NameBtn.TextSize = 13
-                    NameBtn.Parent = Row
-                    NameBtn.MouseButton1Click:Connect(function()
-                        local ch = p.Character
-                        local hrp2 = ch and ch:FindFirstChild("HumanoidRootPart")
-                        if hrp2 then
-                            SafeTeleport(hrp2.Position + Vector3.new(Config.TP_PlayerOffset, 3, Config.TP_PlayerOffset),
-                                "player "..p.Name)
-                        end
-                    end)
-                    local LockBtn = Instance.new("TextButton")
-                    LockBtn.Name = "LockBtn"
-                    LockBtn.Size = UDim2.new(0, 60, 1, 0)
-                    LockBtn.Position = UDim2.new(1, -64, 0, 0)
-                    LockBtn.TextColor3 = Color3.fromRGB(255,255,255)
-                    LockBtn.Font = Enum.Font.GothamBold
-                    LockBtn.TextSize = 11
-                    LockBtn.AutoButtonColor = false
-                    LockBtn.Parent = Row
-                    Instance.new("UICorner", LockBtn).CornerRadius = UDim.new(0, 6)
-                    LockBtn.MouseButton1Click:Connect(function()
-                        SetForcedTarget(p); UpdatePlayerList()
-                    end)
-                end
-                local NameBtn = Row:FindFirstChild("NameBtn")
-                local LockBtn = Row:FindFirstChild("LockBtn")
-                if NameBtn then
-                    NameBtn.Text = "  "..p.Name.."  ["..d.."m]"
-                    NameBtn.TextColor3 = DistToColor(d)
-                end
-                if LockBtn then
-                    LockBtn.BackgroundColor3 = (ForcedTarget == p) and Color3.fromRGB(180,80,255) or Color3.fromRGB(40,40,55)
-                    LockBtn.Text = (ForcedTarget == p) and "UNLOCK" or "LOCK"
-                end
+                local Btn = Instance.new("TextButton")
+                Btn.Size = UDim2.new(1, 0, 0, 36)
+                Btn.BackgroundColor3 = Config.ColorPanel
+                Btn.BackgroundTransparency = 0.3
+                Btn.Text = "  "..p.Name.."  ["..d.."m]"
+                Btn.TextColor3 = DistToColor(d)
+                Btn.TextXAlignment = Enum.TextXAlignment.Left
+                Btn.Font = Enum.Font.GothamMedium
+                Btn.TextSize = 13
+                Btn.Parent = Pages["Players"]
+                Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 8)
+                Btn.MouseButton1Click:Connect(function()
+                    if hrp then
+                        SafeTeleport(hrp.Position + Vector3.new(Config.TP_PlayerOffset, 3, Config.TP_PlayerOffset),
+                            "player "..p.Name)
+                    end
+                end)
             end
-        end
-    end
-    -- Удаляем строки для игроков которых больше нет
-    for _, Row in pairs(Pages["Players"]:GetChildren()) do
-        if Row:IsA("Frame") and Row:GetAttribute("isPlayer") then
-            local uid = tonumber(Row.Name)
-            local found = false
-            for p, _ in pairs(seen) do
-                if p.UserId == uid then found = true break end
-            end
-            if not found then Row:Destroy() end
         end
     end
 end
-task.spawn(function() while task.wait(1.5) do pcall(UpdatePlayerList) end end)
+task.spawn(function() while task.wait(2) do UpdatePlayerList() end end)
 
 -- ═══════════════ VEHICLES ═══════════════
 local VehicleSeats = {}
+local VehicleESP = {}
 local function GetVehicleModel(seat)
     return seat:FindFirstAncestorOfClass("Model") or seat:FindFirstAncestorOfClass("Folder")
 end
@@ -971,9 +824,11 @@ end
 local VL = Instance.new("UIListLayout", Pages["Vehicles"])
 VL.Padding = UDim.new(0, 6)
 local function UpdateVehicleList()
+    for _, v in pairs(Pages["Vehicles"]:GetChildren()) do
+        if v:IsA("TextButton") and v:GetAttribute("isVeh") then v:Destroy() end
+    end
     local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
     if not myHrp then return end
-    local seen = {}
     local models = CollectUniqueModels()
     table.sort(models, function(a, b)
         local pa = ModelAnchor(a); local pb = ModelAnchor(b)
@@ -983,45 +838,28 @@ local function UpdateVehicleList()
     for _, model in ipairs(models) do
         local anchor = ModelAnchor(model)
         if anchor then
-            seen[model] = true
             local d = math.floor((myHrp.Position - anchor.Position).Magnitude)
-            local Row = Pages["Vehicles"]:FindFirstChild(model:GetDebugId() or model.Name)
-            local uid = tostring(model)
-            local Btn = Pages["Vehicles"]:FindFirstChild("veh_"..uid)
-            if not Btn then
-                Btn = Instance.new("TextButton")
-                Btn.Name = "veh_"..uid
-                Btn:SetAttribute("isVeh", true)
-                Btn.Size = UDim2.new(1, 0, 0, 36)
-                Btn.BackgroundColor3 = Config.ColorPanel
-                Btn.BackgroundTransparency = 0.3
-                Btn.TextXAlignment = Enum.TextXAlignment.Left
-                Btn.Font = Enum.Font.GothamMedium
-                Btn.TextSize = 13
-                Btn.Parent = Pages["Vehicles"]
-                Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 8)
-                Btn.MouseButton1Click:Connect(function()
-                    local anc = ModelAnchor(model)
-                    if anc and anc.Parent then
-                        SafeTeleport(anc.Position + Vector3.new(0, 6, 0), "vehicle "..model.Name)
-                    end
-                end)
-            end
+            local Btn = Instance.new("TextButton")
+            Btn:SetAttribute("isVeh", true)
+            Btn.Size = UDim2.new(1, 0, 0, 36)
+            Btn.BackgroundColor3 = Config.ColorPanel
+            Btn.BackgroundTransparency = 0.3
             Btn.Text = "  "..model.Name.."  ["..d.."m]"
             Btn.TextColor3 = DistToColor(d)
-        end
-    end
-    for _, v in pairs(Pages["Vehicles"]:GetChildren()) do
-        if v:IsA("TextButton") and v:GetAttribute("isVeh") then
-            local found = false
-            for model, _ in pairs(seen) do
-                if v.Name == "veh_"..tostring(model) then found = true break end
-            end
-            if not found then v:Destroy() end
+            Btn.TextXAlignment = Enum.TextXAlignment.Left
+            Btn.Font = Enum.Font.GothamMedium
+            Btn.TextSize = 13
+            Btn.Parent = Pages["Vehicles"]
+            Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 8)
+            Btn.MouseButton1Click:Connect(function()
+                if anchor and anchor.Parent then
+                    SafeTeleport(anchor.Position + Vector3.new(0, 6, 0), "vehicle "..model.Name)
+                end
+            end)
         end
     end
 end
-task.spawn(function() while task.wait(2.5) do pcall(UpdateVehicleList) end end)
+task.spawn(function() while task.wait(3) do UpdateVehicleList() end end)
 
 -- ═══════════════ LOGS CHIPS ═══════════════
 local ChipsBar = Instance.new("Frame")
@@ -1115,7 +953,7 @@ AddConn(MinBtn.MouseButton1Click:Connect(function()
     min = not min
     Main.Size = min and UDim2.new(0,720,0,64) or UDim2.new(0,720,0,560)
     for _, v in pairs(Main:GetChildren()) do
-        if v:IsA("ScrollingFrame") or v == TabBar or v == TargetHUD then
+        if v:IsA("ScrollingFrame") or v == TabBar then
             v.Visible = not min
         end
     end
@@ -1255,8 +1093,14 @@ local function GetScreenBox(char, hrp)
     return nil
 end
 
-local RenderESP_Errored = false
 local function RenderESP()
+    if not Config.ESP then
+        for _, d in pairs(ESP) do ForceHide(d) end
+        CH1.Visible = false; CH2.Visible = false
+        FOVCircle.Visible = false
+        return
+    end
+
     if Config.Crosshair then
         local cx, cy = Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2
         local sz = Config.CH_Size
@@ -1265,29 +1109,18 @@ local function RenderESP()
     else
         CH1.Visible = false; CH2.Visible = false
     end
-    local currentFov = Config.FOV
-    if Config.DynamicFOV and Config.Aimbot and UIS:IsMouseButtonPressed(Config.AimKey) then
-        currentFov = Config.FOV * 0.7
-    end
-    FOVCircle.Visible = Config.ShowFOV
-    if Config.ShowFOV then
-        FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-        FOVCircle.Radius = currentFov
-    end
 
     local myChar = LP.Character
     local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
     local myPos = myHrp and myHrp.Position
     local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
     local playerAlive = myHum and myHum.Health > 0
-    local ForcedTarget = ForcedTarget
-    local rendered = 0
 
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LP then
             local ok, err = pcall(function()
                 local d = ESP[p]
-                if not Config.ESP or not playerAlive then
+                if not playerAlive then
                     if d then ForceHide(d) end; return
                 end
                 local char = p.Character
@@ -1309,7 +1142,6 @@ local function RenderESP()
                 if LP.Team and p.Team then
                     color = isEnemy and Color3.fromRGB(255,80,80) or Color3.fromRGB(80,200,255)
                 else color = DistToColor(d3) end
-                if p == ForcedTarget then color = Color3.fromRGB(200,120,255) end
 
                 if not onScreen and Config.ESP_Offscreen then
                     local arrPos = OffscreenArrowPos(sp, 40)
@@ -1364,7 +1196,7 @@ local function RenderESP()
                     if LP.Team and p.Team then
                         prefix = isEnemy and "[E] " or "[A] "
                     end
-                    d.Name.Text = (p == ForcedTarget and "🔒 " or "")..prefix..p.Name
+                    d.Name.Text = prefix..p.Name
                     d.Name.Position = Vector2.new(x + w/2, y-18)
                     d.Name.Color = color
                     local tw = #(prefix..p.Name)*7
@@ -1414,18 +1246,13 @@ local function RenderESP()
                     d.DistBarBg.Visible = false
                     d.DistBarFg.Visible = false
                 end
-                rendered = rendered + 1
             end)
-            if not ok and not RenderESP_Errored then
-                LogError("ESP "..tostring(p)..": "..tostring(err), "ESP")
-                RenderESP_Errored = true
-            end
+            if not ok then LogError("ESP "..tostring(p)..": "..tostring(err), "ESP") end
         end
     end
 end
 
--- ═══════════════ VEHICLE ESP v2 ═══════════════
-local VehicleESP = {}
+-- ═══════════════ VEHICLE ESP ═══════════════
 local function CreateVehicleDraw(model)
     if VehicleESP[model] then return VehicleESP[model] end
     local ok, tbl = pcall(function()
@@ -1444,8 +1271,10 @@ end
 
 local function RenderVehicleESP()
     if not Config.V_ESP then
-        for _, d in pairs(VehicleESP) do
-            for _, v in pairs(d) do v.Visible = false end
+        for model, d in pairs(VehicleESP) do
+            if d.Box then pcall(function() d.Box.Visible = false end) end
+            if d.Name then pcall(function() d.Name.Visible = false end) end
+            if d.Dist then pcall(function() d.Dist.Visible = false end) end
         end
         return
     end
@@ -1508,48 +1337,17 @@ local function RenderVehicleESP()
     end
 end
 
--- ═══════════════ AI v10 ═══════════════
-local ThreatHeat = {}
-local AutoTarget = nil
+-- ═══════════════ SILENT AIM + AI v12 ═══════════════
+local ForcedTarget = nil
 local LastSwitch = 0
-local LastValidLockAt = 0
-local LastScan = 0
-local SwitchCD = 0.3
-local SwitchThreshold = 1.4
-local ScanInterval = 0.08
-local HeatDecayAge = 3.0
-local SwitchHistory = {}
-local ThrashMode = false
-local LastAimReason = ""
+local SwitchCD = 0.25
+local LockHysteresis = 0
 
 local function IsVisible(head)
     local rp = RaycastParams.new()
     rp.FilterDescendantsInstances = {LP.Character, head.Parent}
     rp.FilterType = Enum.RaycastFilterType.Exclude
     return WS:Raycast(Camera.CFrame.Position, head.Position - Camera.CFrame.Position, rp) == nil
-end
-
-local function DecayHeat(now)
-    for p, h in pairs(ThreatHeat) do
-        local age = now - h.ts
-        if age > HeatDecayAge then ThreatHeat[p] = nil
-        else h.score = h.score * math.exp(-age * 0.7) end
-    end
-end
-
-local function UpdateHeat(p, d3, attacking, hp, visible, isEnemy, centerDist)
-    local h = ThreatHeat[p]
-    if not h then h = {score = 0, ts = 0, attacking = false} ThreatHeat[p] = h end
-    h.ts = tick()
-    h.attacking = attacking
-    local raw = 0
-    raw = raw + math.max(0, 600 - d3) * 0.6
-    if attacking then raw = raw + 400 end
-    raw = raw + (1 - hp) * 200
-    if visible then raw = raw + 100 end
-    if isEnemy then raw = raw * 1.3 end
-    if centerDist then raw = raw * math.clamp(1 + (Config.FOV - centerDist) / Config.FOV, 0.5, 1.5) end
-    h.score = h.score * 0.65 + raw * 0.35
 end
 
 local function IsInFov(head, mPos, currentFov)
@@ -1565,7 +1363,6 @@ local function IsInFov(head, mPos, currentFov)
 end
 
 local function GetTarget()
-    local ForcedTarget = ForcedTarget
     if ForcedTarget then
         local ch = ForcedTarget.Character
         local head = ch and ch:FindFirstChild("Head")
@@ -1585,187 +1382,50 @@ local function GetTarget()
     local myChar = LP.Character
     local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
     local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-    if not myHrp or not myHum or myHum.Health <= 0 then AutoTarget = nil; return nil end
+    if not myHrp or not myHum or myHum.Health <= 0 then return nil end
     local myPos = myHrp.Position
 
     local fov = Config.FOV
-    if Config.DynamicFOV and UIS:IsMouseButtonPressed(Config.AimKey) then fov = fov * 0.6 end
-    local now = tick()
-
-    local recent = 0
-    local newHist = {}
-    for _, t in ipairs(SwitchHistory) do
-        if now - t < 0.5 then table.insert(newHist, t); recent = recent + 1 end
-    end
-    SwitchHistory = newHist
-    ThrashMode = recent >= 3
-
-    if Config.TargetLock and AutoTarget then
-        local ch = AutoTarget.Parent
-        local h = ch and ch:FindFirstChildOfClass("Humanoid")
-        local r = ch and ch:FindFirstChild("HumanoidRootPart")
-        local stillValid = false
-        if h and r and h.Health > 0 then
-            local fovCheck = IsInFov(AutoTarget, mPos, fov + 100)
-            local d3 = (myPos - AutoTarget.Position).Magnitude
-            if fovCheck and d3 <= Config.MaxDistance then stillValid = true; LastValidLockAt = now end
-        end
-        if stillValid then return AutoTarget end
-        if now - LastValidLockAt > 0.2 then AutoTarget = nil end
-    elseif not Config.TargetLock then AutoTarget = nil end
-
-    if now - LastScan >= ScanInterval then
-        LastScan = now
-        DecayHeat(now)
-        for _, p in pairs(Players:GetPlayers()) do
-            if p ~= LP and p.Character and PassesTeamFilter(p) then
-                local head = p.Character:FindFirstChild("Head")
-                local hum = p.Character:FindFirstChildOfClass("Humanoid")
-                local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-                if head and hum and hrp and hum.Health > 0 then
-                    local d3 = (myPos - head.Position).Magnitude
-                    if d3 <= Config.MaxDistance then
-                        local look = hrp.CFrame.LookVector
-                        local toMe = (myPos - hrp.Position).Unit
-                        local attacking = look:Dot(toMe) > 0.2
-                        local hp = hum.MaxHealth > 0 and (hum.Health/hum.MaxHealth) or 1
-                        local visible = (not Config.WallCheck) or IsVisible(head)
-                        local isEnemy = LP.Team and p.Team and p.Team ~= LP.Team
-                        local sp = Camera:WorldToViewportPoint(head.Position)
-                        local centerDist = (Vector2.new(sp.X, sp.Y) - mPos).Magnitude
-                        UpdateHeat(p, d3, attacking, hp, visible, isEnemy, centerDist)
-                    end
-                end
-            end
-        end
-    end
-
     local best, bestScore = nil, -math.huge
+    local now = tick()
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LP and p.Character and PassesTeamFilter(p) then
             local head = p.Character:FindFirstChild("Head")
             local hum = p.Character:FindFirstChildOfClass("Humanoid")
-            if head and hum and hum.Health > 0 then
+            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            if head and hum and hrp and hum.Health > 0 then
                 local d3 = (myPos - head.Position).Magnitude
                 if d3 <= Config.MaxDistance then
                     local fovCheck = IsInFov(head, mPos, fov)
                     if fovCheck then
-                        local h = ThreatHeat[p]
-                        local score = h and h.score or ((500 - d3) * 0.5)
-                        if h and h.attacking and d3 < 80 then score = score + 600 end
+                        local hp = hum.MaxHealth > 0 and (hum.Health/hum.MaxHealth) or 1
+                        local visible = (not Config.WallCheck) or IsVisible(head)
+                        local score = 500 - d3
+                        if visible then score = score + 100 end
+                        score = score - (1 - hp) * 50
+                        local look = hrp.CFrame.LookVector
+                        local toMe = (myPos - hrp.Position).Unit
+                        if look:Dot(toMe) > 0.3 then score = score + 300 end
+                        if now - LastSwitch < SwitchCD and LockHysteresis > 0 then
+                            score = score + 50
+                        end
                         if score > bestScore then bestScore = score; best = head end
                     end
                 end
             end
         end
     end
-
-    if Config.TargetLock and best and AutoTarget and best ~= AutoTarget then
-        local effCD = ThrashMode and (SwitchCD * 2) or SwitchCD
-        if now - LastSwitch < effCD then best = AutoTarget
-        else
-            local oldP = Players:GetPlayerFromCharacter(AutoTarget.Parent)
-            local newP = Players:GetPlayerFromCharacter(best.Parent)
-            local oldScore = (oldP and ThreatHeat[oldP] and ThreatHeat[oldP].score) or 0
-            local newScore = (newP and ThreatHeat[newP] and ThreatHeat[newP].score) or 0
-            local thr = ThrashMode and (SwitchThreshold * 1.5) or SwitchThreshold
-            if oldScore * thr > newScore then best = AutoTarget
-            else LastSwitch = now; table.insert(SwitchHistory, now) end
-        end
-    end
-    if Config.TargetLock then AutoTarget = best end
+    if best then LockHysteresis = 1 else LockHysteresis = 0 end
     return best
 end
 
--- ═══════════════ AIM v4 ═══════════════
-local CamLocked = false
-local function LockCamera()
-    if not CamLocked then Camera.CameraType = Enum.CameraType.Scriptable; CamLocked = true end
-end
-local function UnlockCamera()
-    if CamLocked then Camera.CameraType = Enum.CameraType.Custom; CamLocked = false end
-end
-
-local Jitter = Vector3.zero
-local JitterTimer = 0
-local SkipFrames = 0
-local MicroPauseUntil = 0
-local AimStartAt = 0
-local LastAimTarget = nil
-local LastShotAt = 0
-
-local function AimUpdate(target, dt)
-    if not target or not target.Parent then UnlockCamera(); LastAimTarget = nil; return false end
-    local hum = target.Parent:FindFirstChildOfClass("Humanoid")
-    local hrp = target.Parent:FindFirstChild("HumanoidRootPart")
-    if not hum or hum.Health <= 0 or not hrp then UnlockCamera(); LastAimTarget = nil; return false end
-
-    if target ~= LastAimTarget then AimStartAt = tick(); LastAimTarget = target end
-    LockCamera()
-
-    local aimPart = Config.Headshot and target or hrp
-    local origin = Camera.CFrame.Position
-    local vel = aimPart.AssemblyLinearVelocity
-    local speed = vel.Magnitude
-    local ping = LP:GetNetworkPing()
-    local d3 = (origin - aimPart.Position).Magnitude
-    local bulletSpeed = 500
-    local t = ping + d3 / bulletSpeed
-
-    local predicted
-    if speed < 3 then predicted = aimPart.Position
-    else predicted = aimPart.Position + vel * (t * Config.PredictionMultiplier) end
-    predicted = predicted + Vector3.new(0, t * 4, 0)
-
-    local now = tick()
-
-    if Config.Bypass then
-        if now - LastShotAt < 0.06 then return true end
-        if now < MicroPauseUntil then return true end
-        if SkipFrames > 0 then SkipFrames = SkipFrames - 1; return true end
-        if speed > 8 and math.random() > 0.988 then SkipFrames = math.random(1, 2) end
-        if d3 < 100 and math.random() > 0.996 then MicroPauseUntil = now + 0.05 end
-        JitterTimer = JitterTimer + dt
-        if JitterTimer >= 0.4 then
-            JitterTimer = 0
-            Jitter = Vector3.new(
-                (math.random() - 0.5) * 0.007,
-                (math.random() - 0.5) * 0.007,
-                (math.random() - 0.5) * 0.003
-            )
-        end
-    end
-
-    local sp = Camera:WorldToViewportPoint(predicted)
-    local mPos = UIS:GetMouseLocation()
-    local offCenter = (Vector2.new(sp.X, sp.Y) - mPos).Magnitude
-
-    if Config.SnapClose and (d3 < 60 or offCenter < Config.FOV * 0.25) then
-        Camera.CFrame = CFrame.lookAt(origin, predicted + Jitter)
-        return true
-    end
-
-    local since = now - AimStartAt
-    local fadeIn = 1.0
-    if since < 0.08 then fadeIn = 0.5 + (since / 0.08) * 0.5 end
-
-    local alpha = Config.Smoothness
-    if Config.AdaptiveFOV then alpha = alpha * math.clamp(1 + offCenter / 500, 0.7, 1.8) end
-    alpha = math.clamp(alpha * (dt * 60) * fadeIn, 0.03, 0.85)
-    Camera.CFrame = Camera.CFrame:Lerp(CFrame.lookAt(origin, predicted + Jitter), alpha)
-    return true
-end
-
--- ═══════════════ SILENT AIM ═══════════════
 local isShooting = false
 local silentTarget = nil
 local silentActive = false
+
 AddConn(UIS.InputBegan:Connect(function(inp, gp)
     if not gp and (inp.UserInputType == Enum.UserInputType.MouseButton1
-        or inp.UserInputType == Enum.UserInputType.Touch) then
-        isShooting = true
-        LastShotAt = tick()
-    end
+        or inp.UserInputType == Enum.UserInputType.Touch) then isShooting = true end
 end))
 AddConn(UIS.InputEnded:Connect(function(inp, gp)
     if not gp and (inp.UserInputType == Enum.UserInputType.MouseButton1
@@ -1781,12 +1441,30 @@ pcall(function()
             local m = getnamecallmethod()
             if m == "Raycast" then
                 local a = {...}
-                if typeof(a[1]) == "Vector3" then a[2] = silentTarget.Position - a[1] end
+                if typeof(a[1]) == "Vector3" then
+                    local tPos = silentTarget.Position
+                    if Config.Bypass then
+                        tPos = tPos + Vector3.new(
+                            (math.random() - 0.5) * 0.15,
+                            (math.random() - 0.5) * 0.15,
+                            (math.random() - 0.5) * 0.15
+                        )
+                    end
+                    a[2] = tPos - a[1]
+                end
                 return oldNC(self, unpack(a))
             elseif m == "FindPartOnRay" or m == "FindPartOnRayWithIgnoreList" then
                 local a = {...}
                 if typeof(a[1]) == "Ray" then
-                    a[1] = Ray.new(a[1].Origin, silentTarget.Position - a[1].Origin)
+                    local tPos = silentTarget.Position
+                    if Config.Bypass then
+                        tPos = tPos + Vector3.new(
+                            (math.random() - 0.5) * 0.15,
+                            (math.random() - 0.5) * 0.15,
+                            (math.random() - 0.5) * 0.15
+                        )
+                    end
+                    a[1] = Ray.new(a[1].Origin, tPos - a[1].Origin)
                 end
                 return oldNC(self, unpack(a))
             end
@@ -1796,19 +1474,14 @@ pcall(function()
     setreadonly(mt, true)
 end)
 
--- ═══════════════ FPS v2 ═══════════════
+-- ═══════════════ FPS ═══════════════
 local Frames = 0
 local LastFpsUpdate = tick()
 local function UpdateFps()
     Frames = Frames + 1
     local now = tick()
     if now - LastFpsUpdate >= 1 then
-        if PerfLabel then
-            PerfLabel.Text = "FPS: "..Frames
-            PerfLabel.TextColor3 = Frames >= 50 and Color3.fromRGB(120,255,140)
-                or Frames >= 30 and Color3.fromRGB(255,200,80)
-                or Color3.fromRGB(255,100,100)
-        end
+        if PerfLabel then PerfLabel.Text = "FPS: "..Frames end
         Frames = 0; LastFpsUpdate = now
     end
 end
@@ -1818,8 +1491,11 @@ local function TickLogic(dt)
     UpdateFps()
 
     if Config.SilentAim and isShooting then
-        silentTarget = GetTarget(); silentActive = silentTarget ~= nil
-    else silentTarget = nil; silentActive = false end
+        silentTarget = GetTarget()
+        silentActive = silentTarget ~= nil
+    else
+        silentTarget = nil; silentActive = false
+    end
 
     if Config.HitboxExpander then
         for _, p in pairs(Players:GetPlayers()) do
@@ -1837,56 +1513,26 @@ local function TickLogic(dt)
     local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
 
     if not myHum or myHum.Health <= 0 then
-        UnlockCamera()
         for _, d in pairs(ESP) do ForceHide(d) end
         for _, d in pairs(VehicleESP) do for _, v in pairs(d) do v.Visible = false end end
         CH1.Visible = false; CH2.Visible = false; FOVCircle.Visible = false
-        AutoTarget = nil
-        if StatusLabel then StatusLabel.Text = "AI: DEAD"; StatusLabel.TextColor3 = Color3.fromRGB(255,0,0) end
-        if THUD_Title then THUD_Title.Text = "TARGET: NONE" end
+        StatusLabel.Text = "AI: DEAD"; StatusLabel.TextColor3 = Color3.fromRGB(255,0,0)
         return
     end
 
-    if Config.Aimbot and UIS:IsMouseButtonPressed(Config.AimKey) then
-        local target = GetTarget()
-        if target then
-            local isManual = ForcedTarget ~= nil
-            if StatusLabel then
-                StatusLabel.Text = isManual and "AI: MANUAL" or "AI: LOCKED"
-                StatusLabel.TextColor3 = isManual and Color3.fromRGB(200,120,255) or Color3.fromRGB(255,80,80)
-            end
-            local tP = Players:GetPlayerFromCharacter(target.Parent)
-            if tP then
-                local hum = target.Parent:FindFirstChildOfClass("Humanoid")
-                local hrp = target.Parent:FindFirstChild("HumanoidRootPart")
-                if hum and hrp and THUD_Title then
-                    THUD_Title.Text = (isManual and "🔒 " or "").."TARGET: "..tP.Name
-                    local mx = hum.MaxHealth > 0 and hum.MaxHealth or 100
-                    local hpP = math.clamp(hum.Health/mx, 0, 1)
-                    THUD_HPFill:TweenSize(UDim2.new(hpP,0,1,0), Enum.EasingDirection.Out, Enum.EasingStyle.Quad, 0.1, true)
-                    THUD_HPFill.BackgroundColor3 = Color3.fromRGB(255*(1-hpP), 255*hpP, 0)
-                    local myHrp = myChar:FindFirstChild("HumanoidRootPart")
-                    local d = myHrp and math.floor((myHrp.Position - hrp.Position).Magnitude) or 0
-                    THUD_Dist.Text = "DIST: "..d.."m"
-                end
-            end
-            AimUpdate(target, dt)
-        else
-            UnlockCamera()
-            if StatusLabel then StatusLabel.Text = "AI: SCANNING"; StatusLabel.TextColor3 = Config.ColorNeon end
-            if THUD_Title then THUD_Title.Text = "TARGET: NONE" end
-        end
+    if Config.SilentAim and isShooting and silentTarget then
+        StatusLabel.Text = "AI: SILENT"
+        StatusLabel.TextColor3 = Color3.fromRGB(255,80,80)
     else
-        UnlockCamera(); AutoTarget = nil; LastAimTarget = nil
-        if StatusLabel then StatusLabel.Text = "AI: STANDBY"; StatusLabel.TextColor3 = Color3.fromRGB(120,120,120) end
-        if THUD_Title then THUD_Title.Text = "TARGET: NONE" end
+        StatusLabel.Text = "AI: STANDBY"
+        StatusLabel.TextColor3 = Color3.fromRGB(120,120,120)
     end
 end
 
 -- ═══════════════ RENDER BINDING ═══════════════
 local function RenderTick()
-    if Config.ESP or Config.ShowFOV or Config.Crosshair or Config.HitboxExpander then RenderESP() end
-    if Config.V_ESP then RenderVehicleESP() end
+    RenderESP()
+    RenderVehicleESP()
 end
 
 pcall(function()
@@ -1898,5 +1544,4 @@ pcall(function()
     end)
 end)
 
-LogError("MeowMod V44.0 loaded", "SYS")
-LogError("Готово. Все фичи выключены по дефолту.", "SYS")
+LogError("MeowMod V1.5 loaded", "SYS")
