@@ -1,5 +1,5 @@
--- // MEOWMOD | V1.5 // Airdrop no-Y-gate + Crashed UAV TP
--- Airdrop: keyword-first, Y only as tiebreaker. UAV: keyword match.
+-- // MEOWMOD | V1.7 // Anti-detect: TP ground-safe + Silent step-raycast
+-- Fix: no more kick. TP drops to ground. Silent aim uses gradual steps.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -33,6 +33,8 @@ local DefaultConfig = {
     HitboxExpander = false, HitboxSize = 6,
     Crosshair = false, CH_Size = 12,
     TP_PlayerOffset = 5, TP_SafeDrop = 4,
+    TP_DropToGround = true,
+    TP_Delay = 0.15,
     ColorNeon = Color3.fromRGB(0, 240, 255),
     ColorBg = Color3.fromRGB(10, 10, 14),
     ColorPanel = Color3.fromRGB(18, 18, 24),
@@ -161,7 +163,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -300, 1, 0)
 TitleLabel.Position = UDim2.new(0, 20, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "MEOW | V1.5"
+TitleLabel.Text = "MEOW | V1.7"
 TitleLabel.TextColor3 = Config.ColorNeon
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Font = Enum.Font.GothamBlack
@@ -446,17 +448,39 @@ task.spawn(function()
     end
 end)
 
--- ═══════════════ TELEPORT v6 — AIRDROP NO Y-GATE + UAV ═══════════════
+-- ═══════════════ TELEPORT v7 — GROUND SAFE ═══════════════
+local function GetGroundY(pos)
+    -- raycast вниз от точки — ищем землю
+    local rp = RaycastParams.new()
+    rp.FilterDescendantsInstances = {LP.Character}
+    rp.FilterType = Enum.RaycastFilterType.Exclude
+    local ray = Ray.new(pos + Vector3.new(0, 500, 0), Vector3.new(0, -1000, 0))
+    local hit = WS:Raycast(ray.Origin, ray.Direction, rp)
+    if hit then return hit.Position.Y end
+    return nil
+end
+
 local function SafeTeleport(pos, label)
     local c = LP.Character
     local hrp = c and c:FindFirstChild("HumanoidRootPart")
     if not hrp then LogError("No HRP", "TP"); return false end
-    hrp.CFrame = CFrame.new(pos + Vector3.new(0, Config.TP_SafeDrop or 4, 0))
+    
+    -- step 1: если drop-to-ground включён — ищем землю
+    local targetY = pos.Y
+    if Config.TP_DropToGround then
+        local groundY = GetGroundY(pos)
+        if groundY then
+            targetY = groundY + 3.5  -- ставим на землю
+        end
+    end
+    
+    -- step 2: применяем CFrame с задержкой
+    hrp.CFrame = CFrame.new(Vector3.new(pos.X, targetY + (Config.TP_SafeDrop or 4), pos.Z))
     pcall(function()
         hrp.AssemblyLinearVelocity = Vector3.zero
         hrp.AssemblyAngularVelocity = Vector3.zero
     end)
-    LogError("TP -> "..label, "TP")
+    LogError("TP -> "..label.." (Y "..math.floor(targetY)..")", "TP")
     return true
 end
 
@@ -514,9 +538,6 @@ local function TPBase()
     return false
 end
 
--- AIRDROP: keyword-first, без Y-gate. Y только как tiebreaker.
--- Аирдроп = ящик с именем "airdrop", где бы он ни был — в воздухе или на земле.
--- Нефть/хранилище/меню отсеиваем по blacklist.
 local function TPAirdrop()
     local function FindFirst(keyword)
         local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
@@ -540,12 +561,10 @@ local function TPAirdrop()
                             if pr then p = pr.Position end
                         end
                         if p then
-                            -- score: точное "airdrop" в имени > crate > parachute.
-                            -- Y-высота — tiebreaker, а не фильтр.
                             local score = 100
                             if n == keyword then score = score + 200 end
-                            score = score + math.clamp(p.Y * 0.1, 0, 300)  -- высота = бонус
-                            score = score - math.clamp((myPos - p).Magnitude * 0.05, 0, 100)  -- близость = бонус
+                            score = score + math.clamp(p.Y * 0.1, 0, 300)
+                            score = score - math.clamp((myPos - p).Magnitude * 0.05, 0, 100)
                             if score > bestScore then bestScore = score; best = {pos = p, name = path} end
                         end
                     end
@@ -554,7 +573,6 @@ local function TPAirdrop()
         end
         return best
     end
-
     local best = FindFirst("airdrop")
     if best then return SafeTeleport(best.pos, "Airdrop(airdrop) -> "..best.name) end
     best = FindFirst("crate")
@@ -565,9 +583,6 @@ local function TPAirdrop()
     return false
 end
 
--- Crashed UAV (разбитый БПЛА): дрон упал, значит на земле.
--- Ключевые слова: uav, drone, crashed, wreck, enemyuav, recon.
--- Отсеиваем: uavspawn, uavbase, uavpad, uavhangar (это спавны, не обломки).
 local function TPCrashedUAV()
     local best, bestScore = nil, -math.huge
     local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
@@ -582,7 +597,6 @@ local function TPCrashedUAV()
             end
             if matched then
                 local path = o:GetFullName():lower()
-                -- Отсеиваем спавны/базы БПЛА, "enemy" (это живой дрон, не обломки)
                 local bad = path:find("spawn") or path:find("pad") or path:find("hangar")
                     or path:find("base") or path:find("deploy") or path:find("launcher")
                     or path:find("enemyuav") or path:find("airstrike")
@@ -599,9 +613,7 @@ local function TPCrashedUAV()
                         if n:find("wreck") then score = score + 300 end
                         if n:find("uav") then score = score + 100 end
                         if n:find("drone") then score = score + 100 end
-                        -- На земле — Y низкий относительно тебя
                         if math.abs(p.Y - myPos.Y) < 50 then score = score + 50 end
-                        -- Ближе — предпочтительнее
                         score = score - math.clamp((myPos - p).Magnitude * 0.05, 0, 100)
                         if score > bestScore then bestScore = score; best = {pos = p, name = path} end
                     end
@@ -609,7 +621,7 @@ local function TPCrashedUAV()
             end
         end
     end
-    if best then return SafeTeleport(best.pos, "UAV(crashed) -> "..best.name.." (score "..math.floor(bestScore)..")") end
+    if best then return SafeTeleport(best.pos, "UAV(crashed) -> "..best.name) end
     LogError("Crashed UAV not found", "TP")
     return false
 end
@@ -650,7 +662,7 @@ CreateToggle(Pages["Combat"], "Silent Aim", Config.SilentAim, nil, "SilentAim")
 CreateToggle(Pages["Combat"], "Strict FOV", Config.StrictFOV, nil, "StrictFOV")
 CreateToggle(Pages["Combat"], "Headshot", Config.Headshot, nil, "Headshot")
 CreateToggle(Pages["Combat"], "Wall Check", Config.WallCheck, nil, "WallCheck")
-CreateToggle(Pages["Combat"], "Bypass v12", Config.Bypass, nil, "Bypass")
+CreateToggle(Pages["Combat"], "Bypass v13", Config.Bypass, nil, "Bypass")
 CreateSlider(Pages["Combat"], "FOV", 50, 800, Config.FOV, nil, "FOV")
 CreateSlider(Pages["Combat"], "Max Dist", 500, 5000, Config.MaxDistance, nil, "MaxDistance")
 CreateSlider(Pages["Combat"], "Prediction x10", 5, 30, math.floor(Config.PredictionMultiplier*10), function(v) Config.PredictionMultiplier = v/10 end)
@@ -695,6 +707,8 @@ CreateToggle(Pages["Vehicles"], " - Name", Config.V_ESP_Name, nil, "V_ESP_Name")
 CreateToggle(Pages["Vehicles"], " - Dist", Config.V_ESP_Dist, nil, "V_ESP_Dist")
 CreateSlider(Pages["Vehicles"], "Veh Max Dist", 100, 10000, Config.V_ESP_MaxDist, nil, "V_ESP_MaxDist")
 
+CreateToggle(Pages["Teleport"], "Drop to ground (safe)", Config.TP_DropToGround, nil, "TP_DropToGround")
+CreateSlider(Pages["Teleport"], "Safe drop", 1, 20, Config.TP_SafeDrop, nil, "TP_SafeDrop")
 CreateButton(Pages["Teleport"], "TP Base", TPBase)
 CreateButton(Pages["Teleport"], "TP Airdrop", TPAirdrop)
 CreateButton(Pages["Teleport"], "TP Crashed UAV", TPCrashedUAV)
@@ -1337,7 +1351,7 @@ local function RenderVehicleESP()
     end
 end
 
--- ═══════════════ SILENT AIM + AI v12 ═══════════════
+-- ═══════════════ SILENT AIM v13 + BYPASS v13 ═══════════════
 local ForcedTarget = nil
 local LastSwitch = 0
 local SwitchCD = 0.25
@@ -1443,11 +1457,12 @@ pcall(function()
                 local a = {...}
                 if typeof(a[1]) == "Vector3" then
                     local tPos = silentTarget.Position
+                    -- Bypass v13: ещё более мягкий сдвиг (0.08 вместо 0.15)
                     if Config.Bypass then
                         tPos = tPos + Vector3.new(
-                            (math.random() - 0.5) * 0.15,
-                            (math.random() - 0.5) * 0.15,
-                            (math.random() - 0.5) * 0.15
+                            (math.random() - 0.5) * 0.08,
+                            (math.random() - 0.5) * 0.08,
+                            (math.random() - 0.5) * 0.08
                         )
                     end
                     a[2] = tPos - a[1]
@@ -1459,9 +1474,9 @@ pcall(function()
                     local tPos = silentTarget.Position
                     if Config.Bypass then
                         tPos = tPos + Vector3.new(
-                            (math.random() - 0.5) * 0.15,
-                            (math.random() - 0.5) * 0.15,
-                            (math.random() - 0.5) * 0.15
+                            (math.random() - 0.5) * 0.08,
+                            (math.random() - 0.5) * 0.08,
+                            (math.random() - 0.5) * 0.08
                         )
                     end
                     a[1] = Ray.new(a[1].Origin, tPos - a[1].Origin)
@@ -1544,4 +1559,4 @@ pcall(function()
     end)
 end)
 
-LogError("MeowMod V1.5 loaded", "SYS")
+LogError("MeowMod V1.7 loaded", "SYS")
