@@ -1,5 +1,5 @@
--- // MEOWMOD | V1.9 // FOV Circle Fix + Strict Radius Filter
--- Add ShowFOV toggle. Strict pixel-radius check. Silent aim fix.
+-- // MEOWMOD | V2.0 // HARD FOV GATE + LOCK REMOVED
+-- Silent aim strictly inside FOV. Purple line only for valid target.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -21,7 +21,7 @@ local DefaultConfig = {
     SilentAim = false,
     FOV = 260, MaxDistance = 5000,
     StrictFOV = true,
-    ShowFOV = true,          -- ДОБАВЛЕНО: тоггл для круга
+    ShowFOV = true,
     PredictionMultiplier = 1.0,
     Headshot = false, WallCheck = false,
     TeamFilter = "all",
@@ -164,7 +164,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -300, 1, 0)
 TitleLabel.Position = UDim2.new(0, 20, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "MEOW | V1.9"
+TitleLabel.Text = "MEOW | V2.0"
 TitleLabel.TextColor3 = Config.ColorNeon
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Font = Enum.Font.GothamBlack
@@ -654,7 +654,7 @@ end
 -- ═══════════════ UI CONTROLS ═══════════════
 CreateToggle(Pages["Combat"], "Silent Aim", Config.SilentAim, nil, "SilentAim")
 CreateToggle(Pages["Combat"], "Strict FOV", Config.StrictFOV, nil, "StrictFOV")
-CreateToggle(Pages["Combat"], "Show FOV Circle", Config.ShowFOV, nil, "ShowFOV") -- ДОБАВЛЕНО
+CreateToggle(Pages["Combat"], "Show FOV Circle", Config.ShowFOV, nil, "ShowFOV")
 CreateToggle(Pages["Combat"], "Headshot", Config.Headshot, nil, "Headshot")
 CreateToggle(Pages["Combat"], "Wall Check", Config.WallCheck, nil, "WallCheck")
 CreateToggle(Pages["Combat"], "Bypass v14", Config.Bypass, nil, "Bypass")
@@ -1346,8 +1346,7 @@ local function RenderVehicleESP()
     end
 end
 
--- ═══════════════ SILENT AIM + FOV LINE + BYPASS v14 ═══════════════
-local ForcedTarget = nil
+-- ═══════════════ SILENT AIM + HARD FOV GATE ═══════════════
 local LastSwitch = 0
 local SwitchCD = 0.25
 local LockHysteresis = 0
@@ -1359,34 +1358,15 @@ local function IsVisible(head)
     return WS:Raycast(Camera.CFrame.Position, head.Position - Camera.CFrame.Position, rp) == nil
 end
 
-local function IsInFov(head, mPos, currentFov)
+-- ЖЁСТКАЯ ПРОВЕРКА: цель ОБЯЗАНА быть внутри круга FOV на экране
+local function IsStrictlyInFov(head, mPos, currentFov)
     local sp, on = Camera:WorldToViewportPoint(head.Position)
-    if not on then return nil end
+    if not on then return false end
     local d2 = (Vector2.new(sp.X, sp.Y) - mPos).Magnitude
-    if Config.StrictFOV then
-        if d2 > currentFov then return nil end
-    else
-        if d2 > currentFov and (head.Position - Camera.CFrame.Position).Magnitude > 150 then return nil end
-    end
-    return {distPx = d2, sp = sp}
+    return d2 <= currentFov
 end
 
 local function GetTarget()
-    if ForcedTarget then
-        local ch = ForcedTarget.Character
-        local head = ch and ch:FindFirstChild("Head")
-        local hum = ch and ch:FindFirstChildOfClass("Humanoid")
-        local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
-        if head and hum and hrp and hum.Health > 0 then
-            local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-            if myHrp and (myHrp.Position - head.Position).Magnitude <= Config.MaxDistance then
-                return head
-            end
-        end
-        ForcedTarget = nil
-        LogError("Locked target lost", "AI")
-    end
-
     local mPos = UIS:GetMouseLocation()
     local myChar = LP.Character
     local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
@@ -1405,8 +1385,8 @@ local function GetTarget()
             if head and hum and hrp and hum.Health > 0 then
                 local d3 = (myPos - head.Position).Magnitude
                 if d3 <= Config.MaxDistance then
-                    local fovCheck = IsInFov(head, mPos, fov)
-                    if fovCheck then
+                    -- ВОТ ЗДЕСЬ ЖЁСТКИЙ ГЕЙТ
+                    if IsStrictlyInFov(head, mPos, fov) then
                         local hp = hum.MaxHealth > 0 and (hum.Health/hum.MaxHealth) or 1
                         local visible = (not Config.WallCheck) or IsVisible(head)
                         local score = 500 - d3
@@ -1578,4 +1558,4 @@ pcall(function()
     end)
 end)
 
-LogError("MeowMod V1.9 loaded", "SYS")
+LogError("MeowMod V2.0 loaded", "SYS")
