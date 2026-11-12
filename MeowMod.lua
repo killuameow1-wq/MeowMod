@@ -1,5 +1,5 @@
--- // MEOWMOD | V1.7 // Anti-detect: TP ground-safe + Silent step-raycast
--- Fix: no more kick. TP drops to ground. Silent aim uses gradual steps.
+-- // MEOWMOD | V1.8 // FULL BUILD
+-- Silent aim: strict FOV + purple line. Bypass v14. TP fixed. ESP cleaned.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -34,11 +34,11 @@ local DefaultConfig = {
     Crosshair = false, CH_Size = 12,
     TP_PlayerOffset = 5, TP_SafeDrop = 4,
     TP_DropToGround = true,
-    TP_Delay = 0.15,
     ColorNeon = Color3.fromRGB(0, 240, 255),
     ColorBg = Color3.fromRGB(10, 10, 14),
     ColorPanel = Color3.fromRGB(18, 18, 24),
     ColorVehicle = Color3.fromRGB(255, 165, 0),
+    ColorSilent = Color3.fromRGB(180, 0, 255),
 }
 local Config = {}
 for k, v in pairs(DefaultConfig) do Config[k] = v end
@@ -163,7 +163,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -300, 1, 0)
 TitleLabel.Position = UDim2.new(0, 20, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "MEOW | V1.7"
+TitleLabel.Text = "MEOW | V1.8"
 TitleLabel.TextColor3 = Config.ColorNeon
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Font = Enum.Font.GothamBlack
@@ -448,9 +448,8 @@ task.spawn(function()
     end
 end)
 
--- ═══════════════ TELEPORT v7 — GROUND SAFE ═══════════════
+-- ═══════════════ TELEPORT v7 ═══════════════
 local function GetGroundY(pos)
-    -- raycast вниз от точки — ищем землю
     local rp = RaycastParams.new()
     rp.FilterDescendantsInstances = {LP.Character}
     rp.FilterType = Enum.RaycastFilterType.Exclude
@@ -464,17 +463,11 @@ local function SafeTeleport(pos, label)
     local c = LP.Character
     local hrp = c and c:FindFirstChild("HumanoidRootPart")
     if not hrp then LogError("No HRP", "TP"); return false end
-    
-    -- step 1: если drop-to-ground включён — ищем землю
     local targetY = pos.Y
     if Config.TP_DropToGround then
         local groundY = GetGroundY(pos)
-        if groundY then
-            targetY = groundY + 3.5  -- ставим на землю
-        end
+        if groundY then targetY = groundY + 3.5 end
     end
-    
-    -- step 2: применяем CFrame с задержкой
     hrp.CFrame = CFrame.new(Vector3.new(pos.X, targetY + (Config.TP_SafeDrop or 4), pos.Z))
     pcall(function()
         hrp.AssemblyLinearVelocity = Vector3.zero
@@ -662,7 +655,7 @@ CreateToggle(Pages["Combat"], "Silent Aim", Config.SilentAim, nil, "SilentAim")
 CreateToggle(Pages["Combat"], "Strict FOV", Config.StrictFOV, nil, "StrictFOV")
 CreateToggle(Pages["Combat"], "Headshot", Config.Headshot, nil, "Headshot")
 CreateToggle(Pages["Combat"], "Wall Check", Config.WallCheck, nil, "WallCheck")
-CreateToggle(Pages["Combat"], "Bypass v13", Config.Bypass, nil, "Bypass")
+CreateToggle(Pages["Combat"], "Bypass v14", Config.Bypass, nil, "Bypass")
 CreateSlider(Pages["Combat"], "FOV", 50, 800, Config.FOV, nil, "FOV")
 CreateSlider(Pages["Combat"], "Max Dist", 500, 5000, Config.MaxDistance, nil, "MaxDistance")
 CreateSlider(Pages["Combat"], "Prediction x10", 5, 30, math.floor(Config.PredictionMultiplier*10), function(v) Config.PredictionMultiplier = v/10 end)
@@ -1351,7 +1344,7 @@ local function RenderVehicleESP()
     end
 end
 
--- ═══════════════ SILENT AIM v13 + BYPASS v13 ═══════════════
+-- ═══════════════ SILENT AIM + FOV LINE + BYPASS v14 ═══════════════
 local ForcedTarget = nil
 local LastSwitch = 0
 local SwitchCD = 0.25
@@ -1433,6 +1426,12 @@ local function GetTarget()
     return best
 end
 
+local SilentLine = Drawing.new("Line")
+SilentLine.Thickness = 1.5
+SilentLine.Color = Config.ColorSilent
+SilentLine.Transparency = 0.8
+AddDraw(SilentLine)
+
 local isShooting = false
 local silentTarget = nil
 local silentActive = false
@@ -1446,6 +1445,15 @@ AddConn(UIS.InputEnded:Connect(function(inp, gp)
         or inp.UserInputType == Enum.UserInputType.Touch) then isShooting = false end
 end))
 
+local function GetBypassOffset()
+    if not Config.Bypass then return Vector3.zero end
+    return Vector3.new(
+        (math.random() - 0.5) * 0.06,
+        (math.random() - 0.5) * 0.06,
+        (math.random() - 0.5) * 0.06
+    )
+end
+
 pcall(function()
     local mt = getrawmetatable(game)
     local oldNC = mt.__namecall
@@ -1453,32 +1461,18 @@ pcall(function()
     mt.__namecall = newcclosure(function(self, ...)
         if silentActive and silentTarget and silentTarget.Parent then
             local m = getnamecallmethod()
+            local offset = GetBypassOffset()
             if m == "Raycast" then
                 local a = {...}
                 if typeof(a[1]) == "Vector3" then
-                    local tPos = silentTarget.Position
-                    -- Bypass v13: ещё более мягкий сдвиг (0.08 вместо 0.15)
-                    if Config.Bypass then
-                        tPos = tPos + Vector3.new(
-                            (math.random() - 0.5) * 0.08,
-                            (math.random() - 0.5) * 0.08,
-                            (math.random() - 0.5) * 0.08
-                        )
-                    end
+                    local tPos = silentTarget.Position + offset
                     a[2] = tPos - a[1]
                 end
                 return oldNC(self, unpack(a))
             elseif m == "FindPartOnRay" or m == "FindPartOnRayWithIgnoreList" then
                 local a = {...}
                 if typeof(a[1]) == "Ray" then
-                    local tPos = silentTarget.Position
-                    if Config.Bypass then
-                        tPos = tPos + Vector3.new(
-                            (math.random() - 0.5) * 0.08,
-                            (math.random() - 0.5) * 0.08,
-                            (math.random() - 0.5) * 0.08
-                        )
-                    end
+                    local tPos = silentTarget.Position + offset
                     a[1] = Ray.new(a[1].Origin, tPos - a[1].Origin)
                 end
                 return oldNC(self, unpack(a))
@@ -1512,6 +1506,20 @@ local function TickLogic(dt)
         silentTarget = nil; silentActive = false
     end
 
+    if silentActive and silentTarget then
+        local sp, on = Camera:WorldToViewportPoint(silentTarget.Position)
+        if on then
+            SilentLine.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+            SilentLine.To = Vector2.new(sp.X, sp.Y)
+            SilentLine.Color = Config.ColorSilent
+            SilentLine.Visible = true
+        else
+            SilentLine.Visible = false
+        end
+    else
+        SilentLine.Visible = false
+    end
+
     if Config.HitboxExpander then
         for _, p in pairs(Players:GetPlayers()) do
             pcall(function()
@@ -1531,13 +1539,14 @@ local function TickLogic(dt)
         for _, d in pairs(ESP) do ForceHide(d) end
         for _, d in pairs(VehicleESP) do for _, v in pairs(d) do v.Visible = false end end
         CH1.Visible = false; CH2.Visible = false; FOVCircle.Visible = false
+        SilentLine.Visible = false
         StatusLabel.Text = "AI: DEAD"; StatusLabel.TextColor3 = Color3.fromRGB(255,0,0)
         return
     end
 
     if Config.SilentAim and isShooting and silentTarget then
         StatusLabel.Text = "AI: SILENT"
-        StatusLabel.TextColor3 = Color3.fromRGB(255,80,80)
+        StatusLabel.TextColor3 = Config.ColorSilent
     else
         StatusLabel.Text = "AI: STANDBY"
         StatusLabel.TextColor3 = Color3.fromRGB(120,120,120)
@@ -1559,4 +1568,4 @@ pcall(function()
     end)
 end)
 
-LogError("MeowMod V1.7 loaded", "SYS")
+LogError("MeowMod V1.8 loaded", "SYS")
