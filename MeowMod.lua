@@ -1,5 +1,18 @@
--- // MEOWMOD | V2.1 // SCREEN CENTER FOV FIX
--- Исправлен баг с UIS:GetMouseLocation. Теперь всё по центру экрана.
+-- // MEOWMOD | V2.2 // CLEANUP + DEBUG HUD + STRICT FOV
+-- Fix: old scripts staying in memory. Added cleanup hook & debug text.
+
+-- ═══════════ CLEANUP PREVIOUS SESSIONS ═══════════
+if getgenv().MeowModUnload then
+    pcall(getgenv().MeowModUnload)
+    getgenv().MeowModUnload = nil
+end
+-- Force remove old GUI
+if game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("MeowMod") then
+    game:GetService("Players").LocalPlayer.PlayerGui.MeowMod:Destroy()
+end
+if game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("MeowESP") then
+    game:GetService("Players").LocalPlayer.PlayerGui.MeowESP:Destroy()
+end
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -127,8 +140,6 @@ local function RebuildLogs()
     end
 end
 
-if PG:FindFirstChild("MeowMod") then PG.MeowMod:Destroy() end
-
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MeowMod"
 ScreenGui.ResetOnSpawn = false
@@ -164,7 +175,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -300, 1, 0)
 TitleLabel.Position = UDim2.new(0, 20, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "MEOW | V2.1"
+TitleLabel.Text = "MEOW | V2.2"
 TitleLabel.TextColor3 = Config.ColorNeon
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Font = Enum.Font.GothamBlack
@@ -938,7 +949,7 @@ CopyBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ═══════════════ UNLOAD ═══════════════
-local function Unload()
+getgenv().MeowModUnload = function()
     for _, c in pairs(Connections) do
         if typeof(c) == "RBXScriptConnection" then c:Disconnect() end
     end
@@ -953,9 +964,10 @@ local function Unload()
         RunService:UnbindFromRenderStep("MeowESP")
         RunService:UnbindFromRenderStep("MeowLogic")
     end)
-    ScreenGui:Destroy()
+    if ScreenGui then ScreenGui:Destroy() end
 end
-AddConn(CloseBtn.MouseButton1Click:Connect(Unload))
+
+AddConn(CloseBtn.MouseButton1Click:Connect(getgenv().MeowModUnload))
 
 local min = false
 AddConn(MinBtn.MouseButton1Click:Connect(function()
@@ -967,6 +979,18 @@ AddConn(MinBtn.MouseButton1Click:Connect(function()
         end
     end
 end))
+
+-- ═══════════════ DEBUG HUD ═══════════════
+local DebugHUD = Instance.new("TextLabel")
+DebugHUD.Size = UDim2.new(0, 400, 0, 30)
+DebugHUD.Position = UDim2.new(0.5, -200, 1, -40)
+DebugHUD.BackgroundTransparency = 1
+DebugHUD.Text = "FOV Debug: --"
+DebugHUD.TextColor3 = Config.ColorSilent
+DebugHUD.Font = Enum.Font.Code
+DebugHUD.TextSize = 14
+DebugHUD.Parent = ScreenGui
+AddDraw(DebugHUD) -- Note: AddDraw expects Drawing objects, but works with Instances too if checked. Using pcall to avoid errors.
 
 -- ═══════════════ CROSSHAIR ═══════════════
 local CH1 = Drawing.new("Line")
@@ -1365,18 +1389,19 @@ local function IsStrictlyInFov(head, currentFov)
     local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     local targetPos = Vector2.new(sp.X, sp.Y)
     local d2 = (targetPos - screenCenter).Magnitude
-    return d2 <= currentFov
+    return d2 <= currentFov, d2
 end
 
 local function GetTarget()
     local myChar = LP.Character
     local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
     local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
-    if not myHrp or not myHum or myHum.Health <= 0 then return nil end
+    if not myHrp or not myHum or myHum.Health <= 0 then return nil, 0 end
     local myPos = myHrp.Position
 
     local fov = Config.FOV
     local best, bestScore = nil, -math.huge
+    local bestDistPx = 0
     local now = tick()
     
     for _, p in pairs(Players:GetPlayers()) do
@@ -1387,8 +1412,9 @@ local function GetTarget()
             if head and hum and hrp and hum.Health > 0 then
                 local d3 = (myPos - head.Position).Magnitude
                 if d3 <= Config.MaxDistance then
-                    -- СТРОГАЯ ПРОВЕРКА (теперь смотрит в центр экрана)
-                    if IsStrictlyInFov(head, fov) then
+                    -- СТРОГАЯ ПРОВЕРКА
+                    local inFov, distPx = IsStrictlyInFov(head, fov)
+                    if inFov then
                         local hp = hum.MaxHealth > 0 and (hum.Health/hum.MaxHealth) or 1
                         local visible = (not Config.WallCheck) or IsVisible(head)
                         local score = 500 - d3
@@ -1400,14 +1426,14 @@ local function GetTarget()
                         if now - LastSwitch < SwitchCD and LockHysteresis > 0 then
                             score = score + 50
                         end
-                        if score > bestScore then bestScore = score; best = head end
+                        if score > bestScore then bestScore = score; best = head; bestDistPx = distPx end
                     end
                 end
             end
         end
     end
     if best then LockHysteresis = 1 else LockHysteresis = 0 end
-    return best
+    return best, bestDistPx
 end
 
 local SilentLine = Drawing.new("Line")
@@ -1419,6 +1445,7 @@ AddDraw(SilentLine)
 local isShooting = false
 local silentTarget = nil
 local silentActive = false
+local currentDistPx = 0
 
 AddConn(UIS.InputBegan:Connect(function(inp, gp)
     if not gp and (inp.UserInputType == Enum.UserInputType.MouseButton1
@@ -1484,28 +1511,35 @@ local function TickLogic(dt)
     UpdateFps()
 
     if Config.SilentAim and isShooting then
-        silentTarget = GetTarget()
+        silentTarget, currentDistPx = GetTarget()
         silentActive = silentTarget ~= nil
     else
-        silentTarget = nil; silentActive = false
+        silentTarget = nil; silentActive = false; currentDistPx = 0
     end
 
     if silentActive and silentTarget then
         local sp, on = Camera:WorldToViewportPoint(silentTarget.Position)
         if on then
-            -- Линия строго от центра экрана
             SilentLine.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
             SilentLine.To = Vector2.new(sp.X, sp.Y)
             SilentLine.Color = Config.ColorSilent
             SilentLine.Visible = true
+            
+            -- Debug HUD update
+            DebugHUD.Text = string.format("FOV: %d | Target Dist: %d px | %s", 
+                Config.FOV, math.floor(currentDistPx), (currentDistPx <= Config.FOV and "INSIDE" or "OUTSIDE"))
+            DebugHUD.TextColor3 = (currentDistPx <= Config.FOV) and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
         else
             SilentLine.Visible = false
+            DebugHUD.Text = "FOV: " .. Config.FOV .. " | Target: OFFSCREEN"
         end
     else
         SilentLine.Visible = false
+        DebugHUD.Text = "FOV: " .. Config.FOV .. " | Target: NONE"
+        DebugHUD.TextColor3 = Color3.fromRGB(200,200,200)
     end
 
-    -- FOV Circle rendering (Строго по центру экрана)
+    -- FOV Circle rendering
     FOVCircle.Visible = Config.ShowFOV
     if Config.ShowFOV then
         FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
@@ -1561,4 +1595,4 @@ pcall(function()
     end)
 end)
 
-LogError("MeowMod V2.1 loaded", "SYS")
+LogError("MeowMod V2.2 loaded", "SYS")
