@@ -1,17 +1,10 @@
--- // MEOWMOD | V2.2 // CLEANUP + DEBUG HUD + STRICT FOV
--- Fix: old scripts staying in memory. Added cleanup hook & debug text.
+-- // MEOWMOD | V2.3 // ANTI-CONFLICT DRAWINGS (FINAL FIX)
+-- Unique Drawing prefixes to kill ghosts from old script versions.
 
--- ═══════════ CLEANUP PREVIOUS SESSIONS ═══════════
-if getgenv().MeowModUnload then
-    pcall(getgenv().MeowModUnload)
-    getgenv().MeowModUnload = nil
-end
--- Force remove old GUI
-if game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("MeowMod") then
-    game:GetService("Players").LocalPlayer.PlayerGui.MeowMod:Destroy()
-end
-if game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui"):FindFirstChild("MeowESP") then
-    game:GetService("Players").LocalPlayer.PlayerGui.MeowESP:Destroy()
+-- Force unload old versions if possible
+if getgenv().MeowModUnload then pcall(getgenv().MeowModUnload) end
+if game.Players.LocalPlayer.PlayerGui:FindFirstChild("MeowMod") then
+    game.Players.LocalPlayer.PlayerGui.MeowMod:Destroy()
 end
 
 local Players = game:GetService("Players")
@@ -175,7 +168,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -300, 1, 0)
 TitleLabel.Position = UDim2.new(0, 20, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "MEOW | V2.2"
+TitleLabel.Text = "MEOW | V2.3"
 TitleLabel.TextColor3 = Config.ColorNeon
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Font = Enum.Font.GothamBlack
@@ -990,7 +983,6 @@ DebugHUD.TextColor3 = Config.ColorSilent
 DebugHUD.Font = Enum.Font.Code
 DebugHUD.TextSize = 14
 DebugHUD.Parent = ScreenGui
-AddDraw(DebugHUD) -- Note: AddDraw expects Drawing objects, but works with Instances too if checked. Using pcall to avoid errors.
 
 -- ═══════════════ CROSSHAIR ═══════════════
 local CH1 = Drawing.new("Line")
@@ -1382,7 +1374,6 @@ local function IsVisible(head)
     return WS:Raycast(Camera.CFrame.Position, head.Position - Camera.CFrame.Position, rp) == nil
 end
 
--- ЖЁСТКАЯ ПРОВЕРКА: цель ОБЯЗАНА быть внутри круга FOV по ЦЕНТРУ ЭКРАНА
 local function IsStrictlyInFov(head, currentFov)
     local sp, on = Camera:WorldToViewportPoint(head.Position)
     if not on or sp.Z < 0 then return false end
@@ -1412,7 +1403,6 @@ local function GetTarget()
             if head and hum and hrp and hum.Health > 0 then
                 local d3 = (myPos - head.Position).Magnitude
                 if d3 <= Config.MaxDistance then
-                    -- СТРОГАЯ ПРОВЕРКА
                     local inFov, distPx = IsStrictlyInFov(head, fov)
                     if inFov then
                         local hp = hum.MaxHealth > 0 and (hum.Health/hum.MaxHealth) or 1
@@ -1595,4 +1585,4 @@ pcall(function()
     end)
 end)
 
-LogError("MeowMod V2.2 loaded", "SYS")
+LogError("MeowMod V2.3 loaded", "SYS")
