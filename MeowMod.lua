@@ -1,5 +1,5 @@
--- // MEOWMOD | V2.3 // ANTI-CONFLICT DRAWINGS (FINAL FIX)
--- Unique Drawing prefixes to kill ghosts from old script versions.
+-- // MEOWMOD | V2.4 // RELATIVE FOV (PERCENT) + STRICT MATH
+-- Fix: DPI mismatch on mobile. FOV is now % of screen height.
 
 -- Force unload old versions if possible
 if getgenv().MeowModUnload then pcall(getgenv().MeowModUnload) end
@@ -25,7 +25,8 @@ local function HasFS() return typeof(writefile) == "function" and typeof(readfil
 
 local DefaultConfig = {
     SilentAim = false,
-    FOV = 260, MaxDistance = 5000,
+    FOVPercent = 25, -- Новое: FOV в процентах от высоты экрана (25% = радиус четверть экрана)
+    MaxDistance = 5000,
     StrictFOV = true,
     ShowFOV = true,
     PredictionMultiplier = 1.0,
@@ -168,7 +169,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -300, 1, 0)
 TitleLabel.Position = UDim2.new(0, 20, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "MEOW | V2.3"
+TitleLabel.Text = "MEOW | V2.4"
 TitleLabel.TextColor3 = Config.ColorNeon
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Font = Enum.Font.GothamBlack
@@ -662,7 +663,7 @@ CreateToggle(Pages["Combat"], "Show FOV Circle", Config.ShowFOV, nil, "ShowFOV")
 CreateToggle(Pages["Combat"], "Headshot", Config.Headshot, nil, "Headshot")
 CreateToggle(Pages["Combat"], "Wall Check", Config.WallCheck, nil, "WallCheck")
 CreateToggle(Pages["Combat"], "Bypass v14", Config.Bypass, nil, "Bypass")
-CreateSlider(Pages["Combat"], "FOV", 50, 800, Config.FOV, nil, "FOV")
+CreateSlider(Pages["Combat"], "FOV % (от высоты)", 5, 100, Config.FOVPercent, nil, "FOVPercent")
 CreateSlider(Pages["Combat"], "Max Dist", 500, 5000, Config.MaxDistance, nil, "MaxDistance")
 CreateSlider(Pages["Combat"], "Prediction x10", 5, 30, math.floor(Config.PredictionMultiplier*10), function(v) Config.PredictionMultiplier = v/10 end)
 
@@ -1374,13 +1375,18 @@ local function IsVisible(head)
     return WS:Raycast(Camera.CFrame.Position, head.Position - Camera.CFrame.Position, rp) == nil
 end
 
-local function IsStrictlyInFov(head, currentFov)
+local function GetFovRadiusPx()
+    return (Camera.ViewportSize.Y / 2) * (Config.FOVPercent / 100)
+end
+
+local function IsStrictlyInFov(head)
     local sp, on = Camera:WorldToViewportPoint(head.Position)
-    if not on or sp.Z < 0 then return false end
+    if not on or sp.Z < 0 then return false, 0 end
     local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     local targetPos = Vector2.new(sp.X, sp.Y)
     local d2 = (targetPos - screenCenter).Magnitude
-    return d2 <= currentFov, d2
+    local radius = GetFovRadiusPx()
+    return d2 <= radius, d2
 end
 
 local function GetTarget()
@@ -1390,7 +1396,6 @@ local function GetTarget()
     if not myHrp or not myHum or myHum.Health <= 0 then return nil, 0 end
     local myPos = myHrp.Position
 
-    local fov = Config.FOV
     local best, bestScore = nil, -math.huge
     local bestDistPx = 0
     local now = tick()
@@ -1403,7 +1408,7 @@ local function GetTarget()
             if head and hum and hrp and hum.Health > 0 then
                 local d3 = (myPos - head.Position).Magnitude
                 if d3 <= Config.MaxDistance then
-                    local inFov, distPx = IsStrictlyInFov(head, fov)
+                    local inFov, distPx = IsStrictlyInFov(head)
                     if inFov then
                         local hp = hum.MaxHealth > 0 and (hum.Health/hum.MaxHealth) or 1
                         local visible = (not Config.WallCheck) or IsVisible(head)
@@ -1516,24 +1521,25 @@ local function TickLogic(dt)
             SilentLine.Visible = true
             
             -- Debug HUD update
-            DebugHUD.Text = string.format("FOV: %d | Target Dist: %d px | %s", 
-                Config.FOV, math.floor(currentDistPx), (currentDistPx <= Config.FOV and "INSIDE" or "OUTSIDE"))
-            DebugHUD.TextColor3 = (currentDistPx <= Config.FOV) and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
+            local rad = GetFovRadiusPx()
+            DebugHUD.Text = string.format("FOV: %d%% (%d px) | Target: %d px | %s", 
+                Config.FOVPercent, math.floor(rad), math.floor(currentDistPx), (currentDistPx <= rad and "INSIDE" or "OUTSIDE"))
+            DebugHUD.TextColor3 = (currentDistPx <= rad) and Color3.fromRGB(0,255,0) or Color3.fromRGB(255,0,0)
         else
             SilentLine.Visible = false
-            DebugHUD.Text = "FOV: " .. Config.FOV .. " | Target: OFFSCREEN"
+            DebugHUD.Text = "FOV: " .. Config.FOVPercent .. "% | Target: OFFSCREEN"
         end
     else
         SilentLine.Visible = false
-        DebugHUD.Text = "FOV: " .. Config.FOV .. " | Target: NONE"
+        DebugHUD.Text = "FOV: " .. Config.FOVPercent .. "% | Target: NONE"
         DebugHUD.TextColor3 = Color3.fromRGB(200,200,200)
     end
 
-    -- FOV Circle rendering
+    -- FOV Circle rendering (Relative to Viewport Height)
     FOVCircle.Visible = Config.ShowFOV
     if Config.ShowFOV then
         FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-        FOVCircle.Radius = Config.FOV
+        FOVCircle.Radius = GetFovRadiusPx()
         FOVCircle.Color = Config.ColorNeon
     end
 
@@ -1585,4 +1591,4 @@ pcall(function()
     end)
 end)
 
-LogError("MeowMod V2.3 loaded", "SYS")
+LogError("MeowMod V2.4 loaded", "SYS")
