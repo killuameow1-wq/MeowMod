@@ -1,5 +1,5 @@
--- // MEOWMOD | V2.0 // HARD FOV GATE + LOCK REMOVED
--- Silent aim strictly inside FOV. Purple line only for valid target.
+-- // MEOWMOD | V2.1 // SCREEN CENTER FOV FIX
+-- Исправлен баг с UIS:GetMouseLocation. Теперь всё по центру экрана.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -164,7 +164,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -300, 1, 0)
 TitleLabel.Position = UDim2.new(0, 20, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "MEOW | V2.0"
+TitleLabel.Text = "MEOW | V2.1"
 TitleLabel.TextColor3 = Config.ColorNeon
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Font = Enum.Font.GothamBlack
@@ -1346,7 +1346,7 @@ local function RenderVehicleESP()
     end
 end
 
--- ═══════════════ SILENT AIM + HARD FOV GATE ═══════════════
+-- ═══════════════ SILENT AIM + SCREEN CENTER FOV ═══════════════
 local LastSwitch = 0
 local SwitchCD = 0.25
 local LockHysteresis = 0
@@ -1358,16 +1358,17 @@ local function IsVisible(head)
     return WS:Raycast(Camera.CFrame.Position, head.Position - Camera.CFrame.Position, rp) == nil
 end
 
--- ЖЁСТКАЯ ПРОВЕРКА: цель ОБЯЗАНА быть внутри круга FOV на экране
-local function IsStrictlyInFov(head, mPos, currentFov)
+-- ЖЁСТКАЯ ПРОВЕРКА: цель ОБЯЗАНА быть внутри круга FOV по ЦЕНТРУ ЭКРАНА
+local function IsStrictlyInFov(head, currentFov)
     local sp, on = Camera:WorldToViewportPoint(head.Position)
-    if not on then return false end
-    local d2 = (Vector2.new(sp.X, sp.Y) - mPos).Magnitude
+    if not on or sp.Z < 0 then return false end
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    local targetPos = Vector2.new(sp.X, sp.Y)
+    local d2 = (targetPos - screenCenter).Magnitude
     return d2 <= currentFov
 end
 
 local function GetTarget()
-    local mPos = UIS:GetMouseLocation()
     local myChar = LP.Character
     local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
     local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
@@ -1377,6 +1378,7 @@ local function GetTarget()
     local fov = Config.FOV
     local best, bestScore = nil, -math.huge
     local now = tick()
+    
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LP and p.Character and PassesTeamFilter(p) then
             local head = p.Character:FindFirstChild("Head")
@@ -1385,8 +1387,8 @@ local function GetTarget()
             if head and hum and hrp and hum.Health > 0 then
                 local d3 = (myPos - head.Position).Magnitude
                 if d3 <= Config.MaxDistance then
-                    -- ВОТ ЗДЕСЬ ЖЁСТКИЙ ГЕЙТ
-                    if IsStrictlyInFov(head, mPos, fov) then
+                    -- СТРОГАЯ ПРОВЕРКА (теперь смотрит в центр экрана)
+                    if IsStrictlyInFov(head, fov) then
                         local hp = hum.MaxHealth > 0 and (hum.Health/hum.MaxHealth) or 1
                         local visible = (not Config.WallCheck) or IsVisible(head)
                         local score = 500 - d3
@@ -1491,6 +1493,7 @@ local function TickLogic(dt)
     if silentActive and silentTarget then
         local sp, on = Camera:WorldToViewportPoint(silentTarget.Position)
         if on then
+            -- Линия строго от центра экрана
             SilentLine.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
             SilentLine.To = Vector2.new(sp.X, sp.Y)
             SilentLine.Color = Config.ColorSilent
@@ -1502,7 +1505,7 @@ local function TickLogic(dt)
         SilentLine.Visible = false
     end
 
-    -- FOV Circle rendering
+    -- FOV Circle rendering (Строго по центру экрана)
     FOVCircle.Visible = Config.ShowFOV
     if Config.ShowFOV then
         FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
@@ -1558,4 +1561,4 @@ pcall(function()
     end)
 end)
 
-LogError("MeowMod V2.0 loaded", "SYS")
+LogError("MeowMod V2.1 loaded", "SYS")
