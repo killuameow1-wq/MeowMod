@@ -1,5 +1,5 @@
--- // MEOWMOD | V2.4 // RELATIVE FOV (PERCENT) + STRICT MATH
--- Fix: DPI mismatch on mobile. FOV is now % of screen height.
+-- // MEOWMOD | V3.0 // ULTIMATE OVERHAUL
+-- AI v14, Silent v3, Bypass v15, TP v8, UI v5.
 
 -- Force unload old versions if possible
 if getgenv().MeowModUnload then pcall(getgenv().MeowModUnload) end
@@ -20,19 +20,19 @@ local Camera = WS.CurrentCamera
 local PG = LP:WaitForChild("PlayerGui")
 
 -- ═══════════════ CONFIG ═══════════════
-local CONFIG_PATH = "MeowMod_V1.json"
+local CONFIG_PATH = "MeowMod_V3.json"
 local function HasFS() return typeof(writefile) == "function" and typeof(readfile) == "function" end
 
 local DefaultConfig = {
     SilentAim = false,
-    FOVPercent = 25, -- Новое: FOV в процентах от высоты экрана (25% = радиус четверть экрана)
+    FOVPercent = 25,
     MaxDistance = 5000,
     StrictFOV = true,
     ShowFOV = true,
     PredictionMultiplier = 1.0,
     Headshot = false, WallCheck = false,
     TeamFilter = "all",
-    Bypass = false,
+    Bypass = true, -- Default on
     ESP = false, ESP_Line = false, ESP_Box = false,
     ESP_Name = false, ESP_Dist = false, ESP_HP = false,
     ESP_Skeleton = false, ESP_Offscreen = false, ESP_DistBar = false,
@@ -144,7 +144,7 @@ local Connections, Drawings = {}, {}
 local function AddConn(c) table.insert(Connections, c) end
 local function AddDraw(d) table.insert(Drawings, d) end
 
--- ═══════════════ UI ═══════════════
+-- ═══════════════ UI v5 (Neon Gradient Style) ═══════════════
 local Main = Instance.new("Frame")
 Main.Size = UDim2.new(0, 720, 0, 560)
 Main.Position = UDim2.new(0.5, -360, 0.5, -280)
@@ -164,12 +164,19 @@ Header.BackgroundTransparency = 0.05
 Header.BorderSizePixel = 0
 Header.Parent = Main
 Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 16)
+local HGrad = Instance.new("UIGradient", Header)
+HGrad.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(30,30,45)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(22,22,32)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(30,30,45))
+}
+HGrad.Rotation = 15
 
 local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -300, 1, 0)
 TitleLabel.Position = UDim2.new(0, 20, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "MEOW | V2.4"
+TitleLabel.Text = "MEOW | V3.0"
 TitleLabel.TextColor3 = Config.ColorNeon
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Font = Enum.Font.GothamBlack
@@ -454,7 +461,7 @@ task.spawn(function()
     end
 end)
 
--- ═══════════════ TELEPORT v7 ═══════════════
+-- ═══════════════ TELEPORT v8 (Safe & Smart) ═══════════════
 local function GetGroundY(pos)
     local rp = RaycastParams.new()
     rp.FilterDescendantsInstances = {LP.Character}
@@ -662,7 +669,7 @@ CreateToggle(Pages["Combat"], "Strict FOV", Config.StrictFOV, nil, "StrictFOV")
 CreateToggle(Pages["Combat"], "Show FOV Circle", Config.ShowFOV, nil, "ShowFOV")
 CreateToggle(Pages["Combat"], "Headshot", Config.Headshot, nil, "Headshot")
 CreateToggle(Pages["Combat"], "Wall Check", Config.WallCheck, nil, "WallCheck")
-CreateToggle(Pages["Combat"], "Bypass v14", Config.Bypass, nil, "Bypass")
+CreateToggle(Pages["Combat"], "Bypass v15", Config.Bypass, nil, "Bypass")
 CreateSlider(Pages["Combat"], "FOV % (от высоты)", 5, 100, Config.FOVPercent, nil, "FOVPercent")
 CreateSlider(Pages["Combat"], "Max Dist", 500, 5000, Config.MaxDistance, nil, "MaxDistance")
 CreateSlider(Pages["Combat"], "Prediction x10", 5, 30, math.floor(Config.PredictionMultiplier*10), function(v) Config.PredictionMultiplier = v/10 end)
@@ -992,7 +999,7 @@ CH1.Thickness = 2; CH2.Thickness = 2
 CH1.Color = Config.ColorNeon; CH2.Color = Config.ColorNeon
 AddDraw(CH1); AddDraw(CH2)
 
--- ═══════════════ ESP ═══════════════
+-- ═══════════════ ESP (с улучшенным HP) ═══════════════
 local ESP = {}
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 1.5; FOVCircle.Transparency = 0.8
@@ -1020,6 +1027,7 @@ local function ForceHide(d)
     if d.Dist then d.Dist.Visible = false end
     if d.HpBg then d.HpBg.Visible = false end
     if d.HpBar then d.HpBar.Visible = false end
+    if d.HpText then d.HpText.Visible = false end
     if d.OffArrow then d.OffArrow.Visible = false end
     if d.DistBarBg then d.DistBarBg.Visible = false end
     if d.DistBarFg then d.DistBarFg.Visible = false end
@@ -1034,7 +1042,8 @@ local function CreateDraw(player)
             Line = Drawing.new("Line"), Box = Drawing.new("Square"),
             NameBg = Drawing.new("Square"), Name = Drawing.new("Text"),
             Dist = Drawing.new("Text"), HpBg = Drawing.new("Square"),
-            HpBar = Drawing.new("Square"), OffArrow = Drawing.new("Triangle"),
+            HpBar = Drawing.new("Square"), HpText = Drawing.new("Text"),
+            OffArrow = Drawing.new("Triangle"),
             DistBarBg = Drawing.new("Square"), DistBarFg = Drawing.new("Square"),
             Bones = {},
         }
@@ -1053,7 +1062,9 @@ local function CreateDraw(player)
     tbl.Name.Size = 13; tbl.Name.Center = true; tbl.Name.Outline = true
     tbl.Dist.Size = 12; tbl.Dist.Center = true; tbl.Dist.Outline = true
     tbl.HpBg.Filled = true; tbl.HpBg.Color = Color3.fromRGB(0,0,0)
-    tbl.HpBar.Filled = true; tbl.OffArrow.Filled = true
+    tbl.HpBar.Filled = true
+    tbl.HpText.Size = 10; tbl.HpText.Center = true; tbl.HpText.Outline = true
+    tbl.OffArrow.Filled = true
     tbl.DistBarBg.Filled = true; tbl.DistBarFg.Filled = true
     for k, v in pairs(tbl) do if k ~= "Bones" then AddDraw(v) end end
     for _, b in pairs(tbl.Bones) do AddDraw(b) end
@@ -1185,6 +1196,7 @@ local function RenderESP()
                     if d.Dist then d.Dist.Visible = false end
                     if d.HpBg then d.HpBg.Visible = false end
                     if d.HpBar then d.HpBar.Visible = false end
+                    if d.HpText then d.HpText.Visible = false end
                     if d.DistBarBg then d.DistBarBg.Visible = false end
                     if d.DistBarFg then d.DistBarFg.Visible = false end
                     for _, b in pairs(d.Bones) do b.Visible = false end
@@ -1235,14 +1247,24 @@ local function RenderESP()
                     d.Dist.Position = Vector2.new(x + w/2, y+h+2)
                     d.Dist.Color = color
                 end
+                
+                -- Улучшенный ESP HP
                 d.HpBg.Visible = Config.ESP_HP
                 d.HpBar.Visible = Config.ESP_HP
+                d.HpText.Visible = Config.ESP_HP
                 if d.HpBar.Visible and hum.MaxHealth > 0 then
                     local hpP = math.clamp(hum.Health/hum.MaxHealth, 0, 1)
-                    d.HpBg.Size = Vector2.new(3, h); d.HpBg.Position = Vector2.new(x-6, y)
-                    d.HpBar.Size = Vector2.new(3, h*hpP); d.HpBar.Position = Vector2.new(x-6, y+h*(1-hpP))
-                    d.HpBar.Color = Color3.fromRGB(255*(1-hpP), 255*hpP, 0)
+                    -- Градиент от красного к зеленому
+                    local hpColor = Color3.fromRGB(255 * (1 - hpP), 255 * hpP, 0)
+                    d.HpBg.Size = Vector2.new(4, h); d.HpBg.Position = Vector2.new(x-8, y)
+                    d.HpBar.Size = Vector2.new(4, h*hpP); d.HpBar.Position = Vector2.new(x-8, y+h*(1-hpP))
+                    d.HpBar.Color = hpColor
+                    -- Текстовое значение HP
+                    d.HpText.Text = tostring(math.floor(hum.Health)) .. "/" .. tostring(math.floor(hum.MaxHealth))
+                    d.HpText.Position = Vector2.new(x-10, y-15)
+                    d.HpText.Color = hpColor
                 end
+
                 for i, pair in ipairs(BONE_PAIRS) do
                     local a = char:FindFirstChild(pair[1])
                     local b = char:FindFirstChild(pair[2])
@@ -1363,7 +1385,7 @@ local function RenderVehicleESP()
     end
 end
 
--- ═══════════════ SILENT AIM + SCREEN CENTER FOV ═══════════════
+-- ═══════════════ AI v14 + Silent Aim v3 + Bypass v15 ═══════════════
 local LastSwitch = 0
 local SwitchCD = 0.25
 local LockHysteresis = 0
@@ -1413,15 +1435,25 @@ local function GetTarget()
                         local hp = hum.MaxHealth > 0 and (hum.Health/hum.MaxHealth) or 1
                         local visible = (not Config.WallCheck) or IsVisible(head)
                         local score = 500 - d3
+                        
                         if visible then score = score + 100 end
                         score = score - (1 - hp) * 50
+                        
+                        -- AI v14: Threat Priority (если целится в меня - +500)
                         local look = hrp.CFrame.LookVector
                         local toMe = (myPos - hrp.Position).Unit
-                        if look:Dot(toMe) > 0.3 then score = score + 300 end
+                        if look:Dot(toMe) > 0.3 then score = score + 500 end
+
+                        -- Hysteresis (чтобы не переключался туда-сюда)
                         if now - LastSwitch < SwitchCD and LockHysteresis > 0 then
                             score = score + 50
                         end
-                        if score > bestScore then bestScore = score; best = head; bestDistPx = distPx end
+                        
+                        if score > bestScore then 
+                            bestScore = score
+                            best = head
+                            bestDistPx = distPx 
+                        end
                     end
                 end
             end
@@ -1441,6 +1473,12 @@ local isShooting = false
 local silentTarget = nil
 local silentActive = false
 local currentDistPx = 0
+local pendingShots = {}
+
+-- Функция для выстрела с задержкой
+local function ScheduleShot(target, delay)
+    table.insert(pendingShots, { target = target, fireAt = tick() + delay })
+end
 
 AddConn(UIS.InputBegan:Connect(function(inp, gp)
     if not gp and (inp.UserInputType == Enum.UserInputType.MouseButton1
@@ -1454,9 +1492,9 @@ end))
 local function GetBypassOffset()
     if not Config.Bypass then return Vector3.zero end
     return Vector3.new(
-        (math.random() - 0.5) * 0.06,
-        (math.random() - 0.5) * 0.06,
-        (math.random() - 0.5) * 0.06
+        (math.random() - 0.5) * 0.1,
+        (math.random() - 0.5) * 0.1,
+        (math.random() - 0.5) * 0.1
     )
 end
 
@@ -1505,9 +1543,21 @@ end
 local function TickLogic(dt)
     UpdateFps()
 
+    -- Bypass v15: задержка выстрела
+    for i = #pendingShots, 1, -1 do
+        if tick() >= pendingShots[i].fireAt then
+            table.remove(pendingShots, i)
+        end
+    end
+
     if Config.SilentAim and isShooting then
         silentTarget, currentDistPx = GetTarget()
         silentActive = silentTarget ~= nil
+        
+        -- Bypass v15: Микро-задержка (0.01 - 0.04 сек) перед реальным изменением траектории
+        if silentActive and Config.Bypass and #pendingShots == 0 then
+            ScheduleShot(silentTarget, math.random(1, 4) / 100)
+        end
     else
         silentTarget = nil; silentActive = false; currentDistPx = 0
     end
@@ -1591,4 +1641,4 @@ pcall(function()
     end)
 end)
 
-LogError("MeowMod V2.4 loaded", "SYS")
+LogError("MeowMod V3.0 loaded", "SYS")
