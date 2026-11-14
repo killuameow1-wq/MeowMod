@@ -1,6 +1,6 @@
--- // MEOWMOD | V3.2 // WINDUI + V3 CORE (полный)
--- Интерфейс: WindUI (не Rayfield, не Orion).
--- Весь функционал v3: silent aim (WS.Raycast), ESP, vehicle ESP, TP, hitbox, crosshair.
+-- // MEOWMOD | V3.3 | KYRILIB (DELTA MOBILE) + V3 CORE
+-- UI: KyriLib (mobile support, raw.githubusercontent → Delta тянет).
+-- Весь v3: silent aim (WS.Raycast), ESP, vehicle ESP, TP, hitbox, crosshair.
 -- Камера не залипает. Ничего не пропущено.
 
 if getgenv().MeowModUnload then pcall(getgenv().MeowModUnload); task.wait(0.05) end
@@ -18,18 +18,12 @@ local Connections, Drawings = {}, {}
 local function TrackConn(c) table.insert(Connections, c); return c end
 local function TrackDraw(d) table.insert(Drawings, d); return d end
 
--- ═══════════════ WINDUI BOOT ═══════════════
-local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+-- ═══════════════ KYRILIB BOOT ═══════════════
+local kyri = loadstring(game:HttpGet("https://raw.githubusercontent.com/Justanewplayer19/KyriLib/refs/heads/main/source.lua"))()
 
-local Window = WindUI:CreateWindow({
-    Title = "MeowMod V3.2",
-    Icon = "rbxassetid://4483345998",
-    Author = "ollie",
-    Folder = "MeowMod",
-    Size = UDim2.fromOffset(600, 500),
-    Theme = "Dark",
-    Transparent = true,
-    Resizable = true,
+local w = kyri.new("MeowMod V3.3", {
+    GameName = "MeowMod",
+    AutoLoad = "default",
 })
 
 -- ═══════════════ CONFIG ═══════════════
@@ -752,62 +746,55 @@ local function TPNearestEnemy()
     return false
 end
 
--- ═══════════════ WINDUI TABS ═══════════════
-local Combat = Window:Tab({ Title = "Combat", Icon = "crosshair" })
-local Visual = Window:Tab({ Title = "Visuals", Icon = "eye" })
-local Vehicles = Window:Tab({ Title = "Vehicles", Icon = "car" })
-local TP = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
+-- ═══════════════ KYRILIB UI ═══════════════
+local main = w:tab("Combat", "crosshair")
+local vis  = w:tab("Visuals", "eye")
+local veh  = w:tab("Vehicles", "car")
+local tpt  = w:tab("Teleport", "map-pin")
 
 -- Combat
-Combat:Toggle({ Title = "Silent Aim", Default = C.Silent, Callback = function(v) C.Silent = v end })
-Combat:Slider({ Title = "FOV %", Min = 5, Max = 100, Default = C.FOVPercent, Callback = function(v) C.FOVPercent = v end })
-Combat:Slider({ Title = "Max Distance", Min = 500, Max = 5000, Default = C.MaxDist, Callback = function(v) C.MaxDist = v end })
-Combat:Slider({ Title = "Prediction X (x10)", Min = 5, Max = 30, Default = math.floor(C.Prediction * 10), Callback = function(v) C.Prediction = v / 10 end })
-Combat:Slider({ Title = "Prediction Y (x10)", Min = 5, Max = 30, Default = math.floor(C.PredictionY * 10), Callback = function(v) C.PredictionY = v / 10 end })
-Combat:Dropdown({ Title = "Priority", Values = {"distance", "health", "fov"}, Default = C.PriorityMode, Callback = function(o) C.PriorityMode = o end })
-Combat:Toggle({ Title = "Headshot", Default = C.Headshot, Callback = function(v) C.Headshot = v end })
-Combat:Toggle({ Title = "Wall Check", Default = C.WallCheck, Callback = function(v) C.WallCheck = v end })
-Combat:Toggle({ Title = "Bypass", Default = C.Bypass, Callback = function(v) C.Bypass = v end })
-Combat:Slider({ Title = "Bypass Spread", Min = 0, Max = 30, Default = math.floor(C.BypassSpread * 100), Callback = function(v) C.BypassSpread = v / 100 end })
-Combat:Dropdown({ Title = "Team Filter", Values = {"all", "enemy", "my"}, Default = C.TeamFilter, Callback = function(o) C.TeamFilter = o end })
-Combat:Toggle({ Title = "Hitbox Expander", Default = C.HitboxExp, Callback = function(v) C.HitboxExp = v; ApplyHitbox() end })
-Combat:Slider({ Title = "Hitbox Size", Min = 2, Max = 20, Default = C.HitboxSize, Callback = function(v) C.HitboxSize = v; ApplyHitbox() end })
-Combat:Colorpicker({ Title = "Aim Color", Default = C.ColAim, Callback = function(c) C.ColAim = c; SilentLine.Color = c; FOVCircle.Color = c end })
+main:toggle("Silent Aim", C.Silent, function(v) C.Silent = v end)
+main:slider("FOV %", 5, 100, C.FOVPercent, function(v) C.FOVPercent = v end)
+main:slider("Max Distance", 500, 5000, C.MaxDist, function(v) C.MaxDist = v end)
+main:slider("Prediction X (x10)", 5, 30, math.floor(C.Prediction * 10), function(v) C.Prediction = v / 10 end)
+main:slider("Prediction Y (x10)", 5, 30, math.floor(C.PredictionY * 10), function(v) C.PredictionY = v / 10 end)
+main:toggle("Headshot", C.Headshot, function(v) C.Headshot = v end)
+main:toggle("Wall Check", C.WallCheck, function(v) C.WallCheck = v end)
+main:toggle("Bypass", C.Bypass, function(v) C.Bypass = v end)
+main:slider("Bypass Spread", 0, 30, math.floor(C.BypassSpread * 100), function(v) C.BypassSpread = v / 100 end)
+main:toggle("Hitbox Expander", C.HitboxExp, function(v) C.HitboxExp = v; ApplyHitbox() end)
+main:slider("Hitbox Size", 2, 20, C.HitboxSize, function(v) C.HitboxSize = v; ApplyHitbox() end)
 
 -- Visuals
-Visual:Toggle({ Title = "ESP", Default = C.ESP, Callback = function(v) C.ESP = v end })
-Visual:Toggle({ Title = "Box", Default = C.ESP_Box, Callback = function(v) C.ESP_Box = v end })
-Visual:Toggle({ Title = "Name", Default = C.ESP_Name, Callback = function(v) C.ESP_Name = v end })
-Visual:Toggle({ Title = "Distance", Default = C.ESP_Dist, Callback = function(v) C.ESP_Dist = v end })
-Visual:Toggle({ Title = "HP Bar", Default = C.ESP_HP, Callback = function(v) C.ESP_HP = v end })
-Visual:Toggle({ Title = "HP Text", Default = C.ESP_HPText, Callback = function(v) C.ESP_HPText = v end })
-Visual:Toggle({ Title = "Skeleton", Default = C.ESP_Skel, Callback = function(v) C.ESP_Skel = v end })
-Visual:Toggle({ Title = "Line", Default = C.ESP_Line, Callback = function(v) C.ESP_Line = v end })
-Visual:Toggle({ Title = "Offscreen Arrows", Default = C.ESP_Offscr, Callback = function(v) C.ESP_Offscr = v end })
-Visual:Toggle({ Title = "Distance Bar", Default = C.ESP_DistBar, Callback = function(v) C.ESP_DistBar = v end })
-Visual:Slider({ Title = "ESP Max Distance", Min = 500, Max = 5000, Default = C.ESP_MaxDist, Callback = function(v) C.ESP_MaxDist = v end })
-Visual:Toggle({ Title = "Crosshair", Default = C.Crosshair, Callback = function(v) C.Crosshair = v end })
-Visual:Slider({ Title = "Crosshair Size", Min = 5, Max = 30, Default = C.CH_Size, Callback = function(v) C.CH_Size = v end })
-Visual:Colorpicker({ Title = "Ally Color", Default = C.ColAlly, Callback = function(c) C.ColAlly = c end })
-Visual:Colorpicker({ Title = "Enemy Color", Default = C.ColEnemy, Callback = function(c) C.ColEnemy = c end })
-Visual:Colorpicker({ Title = "Crosshair Color", Default = C.ColNeon, Callback = function(c) C.ColNeon = c; CH1.Color = c; CH2.Color = c end })
+vis:toggle("ESP", C.ESP, function(v) C.ESP = v end)
+vis:toggle("Box", C.ESP_Box, function(v) C.ESP_Box = v end)
+vis:toggle("Name", C.ESP_Name, function(v) C.ESP_Name = v end)
+vis:toggle("Distance", C.ESP_Dist, function(v) C.ESP_Dist = v end)
+vis:toggle("HP Bar", C.ESP_HP, function(v) C.ESP_HP = v end)
+vis:toggle("HP Text", C.ESP_HPText, function(v) C.ESP_HPText = v end)
+vis:toggle("Skeleton", C.ESP_Skel, function(v) C.ESP_Skel = v end)
+vis:toggle("Line", C.ESP_Line, function(v) C.ESP_Line = v end)
+vis:toggle("Offscreen Arrows", C.ESP_Offscr, function(v) C.ESP_Offscr = v end)
+vis:toggle("Distance Bar", C.ESP_DistBar, function(v) C.ESP_DistBar = v end)
+vis:slider("ESP Max Distance", 500, 5000, C.ESP_MaxDist, function(v) C.ESP_MaxDist = v end)
+vis:toggle("Crosshair", C.Crosshair, function(v) C.Crosshair = v end)
+vis:slider("Crosshair Size", 5, 30, C.CH_Size, function(v) C.CH_Size = v end)
 
 -- Vehicles
-Vehicles:Toggle({ Title = "Vehicle ESP", Default = C.V_ESP, Callback = function(v) C.V_ESP = v end })
-Vehicles:Toggle({ Title = "Box", Default = C.V_ESP_Box, Callback = function(v) C.V_ESP_Box = v end })
-Vehicles:Toggle({ Title = "Name", Default = C.V_ESP_Name, Callback = function(v) C.V_ESP_Name = v end })
-Vehicles:Toggle({ Title = "Distance", Default = C.V_ESP_Dist, Callback = function(v) C.V_ESP_Dist = v end })
-Vehicles:Slider({ Title = "Max Distance", Min = 100, Max = 10000, Default = C.V_ESP_MaxDist, Callback = function(v) C.V_ESP_MaxDist = v end })
-Vehicles:Colorpicker({ Title = "Color", Default = C.ColVehicle, Callback = function(c) C.ColVehicle = c end })
+veh:toggle("Vehicle ESP", C.V_ESP, function(v) C.V_ESP = v end)
+veh:toggle("Box", C.V_ESP_Box, function(v) C.V_ESP_Box = v end)
+veh:toggle("Name", C.V_ESP_Name, function(v) C.V_ESP_Name = v end)
+veh:toggle("Distance", C.V_ESP_Dist, function(v) C.V_ESP_Dist = v end)
+veh:slider("Max Distance", 100, 10000, C.V_ESP_MaxDist, function(v) C.V_ESP_MaxDist = v end)
 
 -- Teleport
-TP:Toggle({ Title = "Drop to ground", Default = C.TP_DropToGround, Callback = function(v) C.TP_DropToGround = v end })
-TP:Slider({ Title = "Safe drop", Min = 1, Max = 20, Default = C.TP_SafeDrop, Callback = function(v) C.TP_SafeDrop = v end })
-TP:Button({ Title = "TP Base", Callback = TPBase })
-TP:Button({ Title = "TP Airdrop", Callback = TPAirdrop })
-TP:Button({ Title = "TP Crashed UAV", Callback = TPCrashedUAV })
-TP:Button({ Title = "TP Capture", Callback = TPCapture })
-TP:Button({ Title = "TP Nearest Enemy", Callback = TPNearestEnemy })
+tpt:toggle("Drop to ground", C.TP_DropToGround, function(v) C.TP_DropToGround = v end)
+tpt:slider("Safe drop", 1, 20, C.TP_SafeDrop, function(v) C.TP_SafeDrop = v end)
+tpt:button("TP Base", function() TPBase() end)
+tpt:button("TP Airdrop", function() TPAirdrop() end)
+tpt:button("TP Crashed UAV", function() TPCrashedUAV() end)
+tpt:button("TP Capture", function() TPCapture() end)
+tpt:button("TP Nearest Enemy", function() TPNearestEnemy() end)
 
 -- ═══════════════ RENDER LOOP ═══════════════
 local espAccum, ESP_INTERVAL = 0, 1 / 30
@@ -847,15 +834,11 @@ getgenv().MeowModUnload = function()
         end
     end
     silentTarget = nil; silentActive = false
-    pcall(function() WindUI:Destroy() end)
+    pcall(function() w:destroy() end)
     pcall(function()
         getgenv().MeowModUnload = nil
         getgenv().MeowModUnloaded = nil
     end)
 end
 
-WindUI:Notify({
-    Title = "MeowMod V3.2",
-    Content = "WindUI loaded. Silent aim as v3.",
-    Duration = 5,
-})
+w:notify("MeowMod V3.3", "KyriLib mobile loaded. Silent aim as v3.", 5)
