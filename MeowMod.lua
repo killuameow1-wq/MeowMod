@@ -1,9 +1,8 @@
--- // MEOWMOD | V4.6 | NO-CRASH SILENT (ViewportPointToRay only)
--- Убран Workspace:Raycast хук — сервер реджектил и кикал.
--- Оставлен только Camera:ViewportPointToRay / ScreenPointToRay — реальный путь
--- клиентского прицела. Всё в pcall. Reset isShooting на respawn.
--- При вылете игры старый unload вызывается через getgenv() — но при hard-kick
--- глобалы теряются, поэтому запуск скрипта чист.
+-- // MEOWMOD | V4.9 | SILENT AIM AS IN V3
+-- Хук ТОЛЬКО на Workspace:Raycast и FindPartOnRay/WithIgnoreList.
+-- НЕ трогает Camera:ViewportPointToRay / ScreenPointToRay / Mouse.Hit —
+-- поэтому mouselook работает, камера двигается свободно.
+-- silentActive = silentTarget ~= nil (как в v3, без гейта isShooting).
 
 if getgenv().MeowModUnload then pcall(getgenv().MeowModUnload); task.wait(0.05) end
 getgenv().MeowModUnloaded = false
@@ -16,7 +15,6 @@ local WS         = game:GetService("Workspace")
 local LP     = Players.LocalPlayer
 local Camera = WS.CurrentCamera
 
--- ═══════════════ РЕЕСТРЫ ═══════════════
 local Connections, Drawings = {}, {}
 local function TrackConn(c) table.insert(Connections, c); return c end
 local function TrackDraw(d) table.insert(Drawings, d); return d end
@@ -32,10 +30,10 @@ do
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "MeowMod V4.6",
+    Name = "MeowMod V4.9",
     LoadingTitle = "MeowMod",
-    LoadingSubtitle = "no-crash",
-    ConfigurationSaving = { Enabled = true, FolderName = "MeowMod", FileName = "v4_6" },
+    LoadingSubtitle = "silent as v3",
+    ConfigurationSaving = { Enabled = true, FolderName = "MeowMod", FileName = "v4_9" },
     KeySystem = false,
 })
 
@@ -48,7 +46,6 @@ local C = {
     WallCheck     = false,
     Prediction    = 1.0,
     PredictionY   = 1.0,
-    Smoothing     = 0,
     PriorityMode  = "distance",
     Bypass        = true,
     BypassSpread  = 0.08,
@@ -118,7 +115,7 @@ local function SafeTeleport(pos)
     return true
 end
 
--- ═══════════════ SILENT AIM STATE ═══════════════
+-- ═══════════════ SILENT AIM ═══════════════
 local SilentLine = TrackDraw(Drawing.new("Line"))
 SilentLine.Thickness = 1.5
 SilentLine.Color = C.ColAim
@@ -130,13 +127,10 @@ FOVCircle.Color = C.ColAim
 FOVCircle.Transparency = 0.7
 FOVCircle.Filled = false
 
-local isShooting = false
-local silentTarget = nil
-local aimSmoothPos = nil
-local lastSwitch = 0
-local SWITCH_CD = 0.2
+local silentTarget = nil       -- Head instance (как в v3)
+local silentActive = false
 local shotOffset = Vector3.zero
-local _internalRaycast = false
+local _internal = false
 
 local function FovPx()
     return (Camera.ViewportSize.Y * 0.5) * (C.FOVPercent / 100)
@@ -152,12 +146,12 @@ local function InFov(head)
 end
 
 local function Visible(head)
-    _internalRaycast = true
+    _internal = true
     local rp = RaycastParams.new()
     rp.FilterType = Enum.RaycastFilterType.Exclude
     rp.FilterDescendantsInstances = { LP.Character, head.Parent }
     local hit = WS:Raycast(Camera.CFrame.Position, head.Position - Camera.CFrame.Position, rp)
-    _internalRaycast = false
+    _internal = false
     return hit == nil
 end
 
@@ -185,11 +179,10 @@ local function NewShotOffset()
     )
 end
 
-local function CurrentAimPoint()
+-- Точка, куда целимся (как v3: silentTarget.Position + offset)
+local function AimPoint()
     if not silentTarget or not silentTarget.Parent then return nil end
-    local head = silentTarget:FindFirstChild("Head")
-    if not head then return nil end
-    return (aimSmoothPos or Predict(head)) + shotOffset
+    return Predict(silentTarget) + shotOffset
 end
 
 local function ScoreTarget(p, head, hum, hrp, d3, distPx, vis)
@@ -204,43 +197,15 @@ local function ScoreTarget(p, head, hum, hrp, d3, distPx, vis)
     elseif C.PriorityMode == "fov" then score = -distPx * 10
     else score = -d3 end
     if vis then score = score + 100 else score = score - 50 end
-    if p == silentTarget and tick() - lastSwitch < SWITCH_CD then score = score + 300 end
     return score
 end
 
-local function targetValid()
-    if not silentTarget or not silentTarget.Parent then return false end
-    local head = silentTarget:FindFirstChild("Head")
-    local hum  = silentTarget:FindFirstChildOfClass("Humanoid")
-    local hrp  = silentTarget:FindFirstChild("HumanoidRootPart")
-    if not (head and hum and hrp and hum.Health > 0) then return false end
-    local p = Players:GetPlayerFromCharacter(silentTarget)
-    if not p or not inTeam(p) then return false end
-    local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    if not myHrp then return false end
-    if (myHrp.Position - head.Position).Magnitude > C.MaxDist then return false end
-    return InFov(head)
-end
-
-local pickCache = { head = nil, t = 0 }
-local PICK_INTERVAL = 0.05
-
 local function PickTarget()
-    local now = tick()
-    if now - pickCache.t < PICK_INTERVAL and pickCache.head and pickCache.head.Parent then
-        return pickCache.head
-    end
-    pickCache.t = now
-    if targetValid() then
-        local head = silentTarget:FindFirstChild("Head")
-        pickCache.head = head
-        return head
-    end
     local myChar = LP.Character
     local myHrp  = myChar and myChar:FindFirstChild("HumanoidRootPart")
     local myHum  = myChar and myChar:FindFirstChildOfClass("Humanoid")
     if not myHrp or not myHum or myHum.Health <= 0 then
-        pickCache.head = nil; silentTarget = nil; return nil
+        silentTarget = nil; silentActive = false; return nil
     end
     local myPos = myHrp.Position
     local best, bestScore = nil, -math.huge
@@ -263,17 +228,12 @@ local function PickTarget()
             end
         end
     end
-    if best then
-        if best.Parent ~= silentTarget then lastSwitch = tick() end
-        silentTarget = best.Parent
-    else
-        silentTarget = nil
-    end
-    pickCache.head = best
+    silentTarget = best
+    silentActive = best ~= nil
     return best
 end
 
--- ═══════════════ ХУК: только Camera:ViewportPointToRay / ScreenPointToRay ═══════════════
+-- ─── namecall hook: ТОЛЬКО Workspace:Raycast / FindPartOnRay / WithIgnoreList ───
 local hookMT, oldNamecall, hookInstalled = nil, nil, false
 
 local function installNamecallHook()
@@ -282,21 +242,33 @@ local function installNamecallHook()
     oldNamecall = mt.__namecall
     setreadonly(mt, false)
     mt.__namecall = newcclosure(function(self, ...)
-        -- Никогда не трогаем ничего вне Camera + isShooting + живая цель
-        local ok, result = pcall(function()
-            if getgenv().MeowModUnloaded or _internalRaycast then return false end
-            if not isShooting or not silentTarget or not silentTarget.Parent then return false end
-            if self ~= Camera then return false end
-            local method = getnamecallmethod()
-            if method ~= "ViewportPointToRay" and method ~= "ScreenPointToRay" then return false end
-            local aimPoint = CurrentAimPoint()
-            if not aimPoint then return false end
-            local camPos = Camera.CFrame.Position
-            local dir = aimPoint - camPos
-            if dir.Magnitude < 0.001 then return false end
-            return Ray.new(camPos, dir.Unit * dir.Magnitude)
+        if getgenv().MeowModUnloaded or _internal then return oldNamecall(self, ...) end
+        if not silentActive or not silentTarget or not silentTarget.Parent then
+            return oldNamecall(self, ...)
+        end
+        -- ТОЛЬКО Workspace. Ни Camera, ни Mouse, ни другие инстансы.
+        if self ~= WS then return oldNamecall(self, ...) end
+        local method = getnamecallmethod()
+        if method ~= "Raycast" and method ~= "FindPartOnRay" and method ~= "FindPartOnRayWithIgnoreList" then
+            return oldNamecall(self, ...)
+        end
+        local ap = AimPoint()
+        if not ap then return oldNamecall(self, ...) end
+        local ok, res = pcall(function()
+            local a = {...}
+            if method == "Raycast" then
+                if typeof(a[1]) == "Vector3" and typeof(a[2]) == "Vector3" then
+                    a[2] = ap - a[1]
+                end
+                return oldNamecall(self, unpack(a))
+            else
+                if typeof(a[1]) == "Ray" then
+                    a[1] = Ray.new(a[1].Origin, ap - a[1].Origin)
+                end
+                return oldNamecall(self, unpack(a))
+            end
         end)
-        if ok and result then return result end
+        if ok then return res end
         return oldNamecall(self, ...)
     end)
     setreadonly(mt, true)
@@ -315,58 +287,21 @@ local function removeNamecallHook()
 end
 installNamecallHook()
 
--- ═══════════════ INPUT ═══════════════
-TrackConn(UIS.InputBegan:Connect(function(i, gp)
-    if not gp and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then
-        isShooting = true
-        shotOffset = NewShotOffset()
-        pickCache.t = 0
-    end
-end))
-TrackConn(UIS.InputEnded:Connect(function(i, gp)
-    if not gp and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then
-        isShooting = false
-    end
-end))
-
--- Reset на респавн/смерть — иначе зависает isShooting
-local function resetCombatState()
-    isShooting = false
-    silentTarget = nil
-    aimSmoothPos = nil
-    pickCache.head = nil
-    pickCache.t = 0
-end
-TrackConn(LP.CharacterAdded:Connect(resetCombatState))
-TrackConn(LP.CharacterRemoving:Connect(resetCombatState))
-if LP.Character then
-    local hum = LP.Character:FindFirstChildOfClass("Humanoid")
-    if hum then
-        TrackConn(hum.Died:Connect(resetCombatState))
-    end
-end
-
 -- ═══════════════ AIM UPDATE ═══════════════
 local fovLastRadius = nil
 local function UpdateAim(dt)
-    if not C.Silent or not isShooting then
-        silentTarget = nil; aimSmoothPos = nil
+    if not C.Silent then
+        silentTarget = nil; silentActive = false
         SilentLine.Visible = false; FOVCircle.Visible = false
         return
     end
+    -- Пересобираем цель каждый кадр (PickTarget сам быстро возвращает если нечего)
     local head = PickTarget()
     if not head then
-        aimSmoothPos = nil
         SilentLine.Visible = false
     else
-        local raw = Predict(head) + shotOffset
-        if C.Smoothing > 0 then
-            local f = math.clamp(1 - C.Smoothing * dt * 10, 0, 1)
-            aimSmoothPos = aimSmoothPos and aimSmoothPos:Lerp(raw, f) or raw
-        else
-            aimSmoothPos = raw
-        end
-        local sp, on = Camera:WorldToViewportPoint(aimSmoothPos)
+        local ap = Predict(head) + shotOffset
+        local sp, on = Camera:WorldToViewportPoint(ap)
         if on then
             SilentLine.From = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.5)
             SilentLine.To = Vector2.new(sp.X, sp.Y)
@@ -380,6 +315,24 @@ local function UpdateAim(dt)
         fovLastRadius = r
     end
     FOVCircle.Visible = true
+end
+
+-- Обновляем shotOffset на нажатие ЛКМ
+TrackConn(UIS.InputBegan:Connect(function(i, gp)
+    if not gp and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then
+        shotOffset = NewShotOffset()
+    end
+end))
+
+local function resetCombatState()
+    silentTarget = nil
+    silentActive = false
+end
+TrackConn(LP.CharacterAdded:Connect(resetCombatState))
+TrackConn(LP.CharacterRemoving:Connect(resetCombatState))
+if LP.Character then
+    local hum = LP.Character:FindFirstChildOfClass("Humanoid")
+    if hum then TrackConn(hum.Died:Connect(resetCombatState)) end
 end
 
 -- ═══════════════ ESP ═══════════════
@@ -460,7 +413,6 @@ local function boxOf(char)
     if not feet then return nil end
     local lSh = char:FindFirstChild("LeftUpperArm")
     local rSh = char:FindFirstChild("RightUpperArm")
-
     local camCF = Camera.CFrame
     local vpSize = Camera.ViewportSize
     local tanY = math.tan(math.rad(Camera.FieldOfView * 0.5))
@@ -472,7 +424,6 @@ local function boxOf(char)
         local sy = -(rel.Y / -rel.Z) / tanY * vpSize.Y * 0.5 + vpSize.Y * 0.5
         return Vector2.new(sx, sy)
     end
-
     local hS = project(head.Position + Vector3.new(0, 0.5, 0))
     local fS = project(feet.Position - Vector3.new(0, 0.5, 0))
     if not hS or not fS then return nil end
@@ -482,9 +433,7 @@ local function boxOf(char)
     if lSh and rSh then
         local lS = project(lSh.Position)
         local rS = project(rSh.Position)
-        if lS and rS then
-            w = math.abs(rS.X - lS.X) * 1.8
-        else w = h * 0.55 end
+        if lS and rS then w = math.abs(rS.X - lS.X) * 1.8 else w = h * 0.55 end
     else w = h * 0.55 end
     if w <= 0 or w > 1000 or h > 1000 then return nil end
     return { x = hS.X - w * 0.5, y = hS.Y, w = w, h = h }
@@ -511,7 +460,6 @@ local function UpdateESP()
     local myHum  = myChar and myChar:FindFirstChildOfClass("Humanoid")
     local myPos  = myHrp and myHrp.Position
     local myAlive = myHum and myHum.Health > 0
-
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LP then
             local d = ESP[p] or makeESP(p)
@@ -519,7 +467,6 @@ local function UpdateESP()
             local hrp  = char and char:FindFirstChild("HumanoidRootPart")
             local hum  = char and char:FindFirstChildOfClass("Humanoid")
             local head = char and char:FindFirstChild("Head")
-
             if not (myAlive and char and hrp and hum and head and hum.Health > 0 and inTeam(p)) then
                 hideESP(d)
             else
@@ -548,18 +495,15 @@ local function UpdateESP()
                         for i = 1, #d.Bones do d.Bones[i].Visible = false end
                     else
                         d.OffArrow.Visible = false
-                        if not on then
-                            hideESP(d)
+                        if not on then hideESP(d)
                         else
                             local box = boxOf(char)
                             local x, y, w, h
-                            if box then
-                                x, y, w, h = box.x, box.y, box.w, box.h
+                            if box then x, y, w, h = box.x, box.y, box.w, box.h
                             else
                                 h = math.clamp(8000 / math.max(dist, 1), 20, 500)
                                 w = h * 0.5
-                                x = sp.X - w * 0.5
-                                y = sp.Y - h * 0.5
+                                x = sp.X - w * 0.5; y = sp.Y - h * 0.5
                             end
                             d.Box.Visible = C.ESP_Box
                             if C.ESP_Box then
@@ -934,7 +878,6 @@ Combat:CreateSlider({ Name = "FOV %", Range = {5, 100}, Increment = 1, Suffix = 
 Combat:CreateSlider({ Name = "Max Distance", Range = {500, 5000}, Increment = 100, Suffix = "m", CurrentValue = C.MaxDist, Flag = "maxdist", Callback = function(v) C.MaxDist = v end })
 Combat:CreateSlider({ Name = "Prediction X (x10)", Range = {5, 30}, Increment = 1, CurrentValue = math.floor(C.Prediction * 10), Flag = "predx", Callback = function(v) C.Prediction = v / 10 end })
 Combat:CreateSlider({ Name = "Prediction Y (x10)", Range = {5, 30}, Increment = 1, CurrentValue = math.floor(C.PredictionY * 10), Flag = "predy", Callback = function(v) C.PredictionY = v / 10 end })
-Combat:CreateSlider({ Name = "Smoothing %", Range = {0, 95}, Increment = 1, Suffix = "%", CurrentValue = math.floor(C.Smoothing * 100), Flag = "smooth", Callback = function(v) C.Smoothing = v / 100 end })
 Combat:CreateDropdown({ Name = "Priority", Options = {"distance", "health", "threat", "fov"}, CurrentOption = {C.PriorityMode}, Flag = "prio", Callback = function(o) C.PriorityMode = o[1] end })
 Combat:CreateToggle({ Name = "Headshot", CurrentValue = C.Headshot, Flag = "headshot", Callback = function(v) C.Headshot = v end })
 Combat:CreateToggle({ Name = "Wall Check", CurrentValue = C.WallCheck, Flag = "wall", Callback = function(v) C.WallCheck = v end })
@@ -1011,9 +954,7 @@ getgenv().MeowModUnload = function()
         pcall(function() if typeof(c) == "RBXScriptConnection" then c:Disconnect() end end)
     end
     Connections = {}
-    for _, d in ipairs(Drawings) do
-        pcall(function() d:Remove() end)
-    end
+    for _, d in ipairs(Drawings) do pcall(function() d:Remove() end) end
     Drawings = {}
     ESP = {}
     VehicleESP = {}
@@ -1028,7 +969,7 @@ getgenv().MeowModUnload = function()
             end)
         end
     end
-    silentTarget = nil; aimSmoothPos = nil; isShooting = false
+    silentTarget = nil; silentActive = false
     pcall(function() Rayfield:Destroy() end)
     pcall(function()
         getgenv().MeowModUnload = nil
@@ -1037,7 +978,7 @@ getgenv().MeowModUnload = function()
 end
 
 Rayfield:Notify({
-    Title = "MeowMod V4.6",
-    Content = "No-crash build. Raycast hook removed.",
+    Title = "MeowMod V4.9",
+    Content = "Silent aim as v3. Camera free.",
     Duration = 5,
 })
