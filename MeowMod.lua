@@ -1,16 +1,14 @@
--- // MEOWMOD | V4.9 | SILENT AIM AS IN V3
--- Хук ТОЛЬКО на Workspace:Raycast и FindPartOnRay/WithIgnoreList.
--- НЕ трогает Camera:ViewportPointToRay / ScreenPointToRay / Mouse.Hit —
--- поэтому mouselook работает, камера двигается свободно.
--- silentActive = silentTarget ~= nil (как в v3, без гейта isShooting).
+-- // MEOWMOD | V3.1 // ORION UI + V3 CORE
+-- Весь функционал v3 (silent aim, ESP, TP, vehicle, hitbox) пересажен на Orion UI.
+-- Orion: темы, конфиги, анимации, всё как Rayfield но аккуратнее.
 
 if getgenv().MeowModUnload then pcall(getgenv().MeowModUnload); task.wait(0.05) end
-getgenv().MeowModUnloaded = false
 
 local Players    = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS        = game:GetService("UserInputService")
 local WS         = game:GetService("Workspace")
+local CollSvc    = game:GetService("CollectionService")
 
 local LP     = Players.LocalPlayer
 local Camera = WS.CurrentCamera
@@ -19,23 +17,8 @@ local Connections, Drawings = {}, {}
 local function TrackConn(c) table.insert(Connections, c); return c end
 local function TrackDraw(d) table.insert(Drawings, d); return d end
 
--- ═══════════════ RAYFIELD ═══════════════
-local Rayfield
-do
-    local ok, res = pcall(function()
-        return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
-    end)
-    if not ok or not res then return warn("[MeowMod] Rayfield load failed") end
-    Rayfield = res
-end
-
-local Window = Rayfield:CreateWindow({
-    Name = "MeowMod V4.9",
-    LoadingTitle = "MeowMod",
-    LoadingSubtitle = "silent as v3",
-    ConfigurationSaving = { Enabled = true, FolderName = "MeowMod", FileName = "v4_9" },
-    KeySystem = false,
-})
+-- ═══════════════ ORION BOOT ═══════════════
+local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Qanuir/orion-ui/refs/heads/main/source.lua"))()
 
 -- ═══════════════ CONFIG ═══════════════
 local C = {
@@ -70,7 +53,6 @@ local C = {
     HitboxSize    = 6,
     Crosshair     = false,
     CH_Size       = 12,
-    Hitmarker     = true,
     TP_SafeDrop   = 4,
     TP_DropToGround = true,
     ColAlly       = Color3.fromRGB(80, 200, 255),
@@ -127,10 +109,9 @@ FOVCircle.Color = C.ColAim
 FOVCircle.Transparency = 0.7
 FOVCircle.Filled = false
 
-local silentTarget = nil       -- Head instance (как в v3)
+local silentTarget = nil
 local silentActive = false
 local shotOffset = Vector3.zero
-local _internal = false
 
 local function FovPx()
     return (Camera.ViewportSize.Y * 0.5) * (C.FOVPercent / 100)
@@ -143,16 +124,6 @@ local function InFov(head)
     local dx, dy = sp.X - cx, sp.Y - cy
     local d = math.sqrt(dx * dx + dy * dy)
     return d <= FovPx(), d
-end
-
-local function Visible(head)
-    _internal = true
-    local rp = RaycastParams.new()
-    rp.FilterType = Enum.RaycastFilterType.Exclude
-    rp.FilterDescendantsInstances = { LP.Character, head.Parent }
-    local hit = WS:Raycast(Camera.CFrame.Position, head.Position - Camera.CFrame.Position, rp)
-    _internal = false
-    return hit == nil
 end
 
 local function Predict(head)
@@ -179,25 +150,9 @@ local function NewShotOffset()
     )
 end
 
--- Точка, куда целимся (как v3: silentTarget.Position + offset)
 local function AimPoint()
     if not silentTarget or not silentTarget.Parent then return nil end
     return Predict(silentTarget) + shotOffset
-end
-
-local function ScoreTarget(p, head, hum, hrp, d3, distPx, vis)
-    local score
-    if C.PriorityMode == "distance" then score = -d3
-    elseif C.PriorityMode == "health" then score = 1000 - (hum.Health / math.max(hum.MaxHealth, 1)) * 1000
-    elseif C.PriorityMode == "threat" then
-        local look = hrp.CFrame.LookVector
-        local toMe = (LP.Character.HumanoidRootPart.Position - hrp.Position).Unit
-        local dot = look:Dot(toMe)
-        score = dot * 500 + (dot > 0.3 and 500 or 0) - d3 * 0.5
-    elseif C.PriorityMode == "fov" then score = -distPx * 10
-    else score = -d3 end
-    if vis then score = score + 100 else score = score - 50 end
-    return score
 end
 
 local function PickTarget()
@@ -220,8 +175,10 @@ local function PickTarget()
                 if d3 <= C.MaxDist then
                     local ok2, distPx = InFov(head)
                     if ok2 then
-                        local vis = (not C.WallCheck) or Visible(head)
-                        local s = ScoreTarget(p, head, hum, hrp, d3, distPx, vis)
+                        local s
+                        if C.PriorityMode == "distance" then s = -d3
+                        elseif C.PriorityMode == "health" then s = 1000 - (hum.Health / math.max(hum.MaxHealth, 1)) * 1000
+                        else s = -distPx * 10 end
                         if s > bestScore then best, bestScore = head, s end
                     end
                 end
@@ -233,10 +190,11 @@ local function PickTarget()
     return best
 end
 
--- ─── namecall hook: ТОЛЬКО Workspace:Raycast / FindPartOnRay / WithIgnoreList ───
+-- ─── namecall hook: ТОЛЬКО Workspace:Raycast / FindPartOnRay ───
 local hookMT, oldNamecall, hookInstalled = nil, nil, false
+local _internal = false
 
-local function installNamecallHook()
+local function installHook()
     if hookInstalled then return end
     local mt = getrawmetatable(game)
     oldNamecall = mt.__namecall
@@ -246,7 +204,6 @@ local function installNamecallHook()
         if not silentActive or not silentTarget or not silentTarget.Parent then
             return oldNamecall(self, ...)
         end
-        -- ТОЛЬКО Workspace. Ни Camera, ни Mouse, ни другие инстансы.
         if self ~= WS then return oldNamecall(self, ...) end
         local method = getnamecallmethod()
         if method ~= "Raycast" and method ~= "FindPartOnRay" and method ~= "FindPartOnRayWithIgnoreList" then
@@ -272,11 +229,10 @@ local function installNamecallHook()
         return oldNamecall(self, ...)
     end)
     setreadonly(mt, true)
-    hookMT = mt
-    hookInstalled = true
+    hookMT = mt; hookInstalled = true
 end
 
-local function removeNamecallHook()
+local function removeHook()
     if not hookInstalled then return end
     pcall(function()
         setreadonly(hookMT, false)
@@ -285,17 +241,22 @@ local function removeNamecallHook()
     end)
     hookMT = nil; oldNamecall = nil; hookInstalled = false
 end
-installNamecallHook()
+installHook()
+
+TrackConn(UIS.InputBegan:Connect(function(i, gp)
+    if not gp and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then
+        shotOffset = NewShotOffset()
+    end
+end))
 
 -- ═══════════════ AIM UPDATE ═══════════════
 local fovLastRadius = nil
-local function UpdateAim(dt)
+local function UpdateAim()
     if not C.Silent then
         silentTarget = nil; silentActive = false
         SilentLine.Visible = false; FOVCircle.Visible = false
         return
     end
-    -- Пересобираем цель каждый кадр (PickTarget сам быстро возвращает если нечего)
     local head = PickTarget()
     if not head then
         SilentLine.Visible = false
@@ -311,28 +272,9 @@ local function UpdateAim(dt)
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.5)
     local r = FovPx()
     if not fovLastRadius or math.abs(fovLastRadius - r) > 0.5 then
-        FOVCircle.Radius = r
-        fovLastRadius = r
+        FOVCircle.Radius = r; fovLastRadius = r
     end
     FOVCircle.Visible = true
-end
-
--- Обновляем shotOffset на нажатие ЛКМ
-TrackConn(UIS.InputBegan:Connect(function(i, gp)
-    if not gp and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then
-        shotOffset = NewShotOffset()
-    end
-end))
-
-local function resetCombatState()
-    silentTarget = nil
-    silentActive = false
-end
-TrackConn(LP.CharacterAdded:Connect(resetCombatState))
-TrackConn(LP.CharacterRemoving:Connect(resetCombatState))
-if LP.Character then
-    local hum = LP.Character:FindFirstChildOfClass("Humanoid")
-    if hum then TrackConn(hum.Died:Connect(resetCombatState)) end
 end
 
 -- ═══════════════ ESP ═══════════════
@@ -397,9 +339,7 @@ local function dropESP(p)
     for k, v in pairs(d) do
         if k == "Bones" then
             for _, b in ipairs(v) do pcall(function() b:Remove() end) end
-        else
-            pcall(function() v:Remove() end)
-        end
+        else pcall(function() v:Remove() end) end
     end
     ESP[p] = nil
 end
@@ -431,8 +371,7 @@ local function boxOf(char)
     if h <= 0 then return nil end
     local w
     if lSh and rSh then
-        local lS = project(lSh.Position)
-        local rS = project(rSh.Position)
+        local lS = project(lSh.Position); local rS = project(rSh.Position)
         if lS and rS then w = math.abs(rS.X - lS.X) * 1.8 else w = h * 0.55 end
     else w = h * 0.55 end
     if w <= 0 or w > 1000 or h > 1000 then return nil end
@@ -502,80 +441,58 @@ local function UpdateESP()
                             if box then x, y, w, h = box.x, box.y, box.w, box.h
                             else
                                 h = math.clamp(8000 / math.max(dist, 1), 20, 500)
-                                w = h * 0.5
-                                x = sp.X - w * 0.5; y = sp.Y - h * 0.5
+                                w = h * 0.5; x = sp.X - w * 0.5; y = sp.Y - h * 0.5
                             end
                             d.Box.Visible = C.ESP_Box
                             if C.ESP_Box then
-                                d.Box.Size = Vector2.new(w, h)
-                                d.Box.Position = Vector2.new(x, y)
-                                d.Box.Color = col
+                                d.Box.Size = Vector2.new(w, h); d.Box.Position = Vector2.new(x, y); d.Box.Color = col
                             end
                             d.Line.Visible = C.ESP_Line
                             if C.ESP_Line then
                                 d.Line.From = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y)
-                                d.Line.To = Vector2.new(sp.X, sp.Y)
-                                d.Line.Color = col
+                                d.Line.To = Vector2.new(sp.X, sp.Y); d.Line.Color = col
                             end
-                            d.Name.Visible = C.ESP_Name
-                            d.NameBg.Visible = C.ESP_Name
+                            d.Name.Visible = C.ESP_Name; d.NameBg.Visible = C.ESP_Name
                             if C.ESP_Name then
-                                d.Name.Text = p.Name
-                                d.Name.Position = Vector2.new(x + w * 0.5, y - 18)
-                                d.Name.Color = col
+                                d.Name.Text = p.Name; d.Name.Position = Vector2.new(x + w * 0.5, y - 18); d.Name.Color = col
                                 local tw = #p.Name * 7 + 12
-                                d.NameBg.Size = Vector2.new(tw, 18)
-                                d.NameBg.Position = Vector2.new(x + w * 0.5 - tw * 0.5, y - 19)
+                                d.NameBg.Size = Vector2.new(tw, 18); d.NameBg.Position = Vector2.new(x + w * 0.5 - tw * 0.5, y - 19)
                             end
                             d.Dist.Visible = C.ESP_Dist
                             if C.ESP_Dist then
                                 d.Dist.Text = tostring(math.floor(dist)) .. "m"
-                                d.Dist.Position = Vector2.new(x + w * 0.5, y + h + 2)
-                                d.Dist.Color = col
+                                d.Dist.Position = Vector2.new(x + w * 0.5, y + h + 2); d.Dist.Color = col
                             end
-                            d.HpBg.Visible = C.ESP_HP
-                            d.HpBar.Visible = C.ESP_HP
-                            d.HpText.Visible = C.ESP_HP and C.ESP_HPText
+                            d.HpBg.Visible = C.ESP_HP; d.HpBar.Visible = C.ESP_HP; d.HpText.Visible = C.ESP_HP and C.ESP_HPText
                             if C.ESP_HP and hum.MaxHealth > 0 then
                                 local hp = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
                                 local hpc = Color3.fromRGB(255 * (1 - hp), 255 * hp, 0)
-                                d.HpBg.Size = Vector2.new(4, h)
-                                d.HpBg.Position = Vector2.new(x - 8, y)
-                                d.HpBar.Size = Vector2.new(4, h * hp)
-                                d.HpBar.Position = Vector2.new(x - 8, y + h * (1 - hp))
-                                d.HpBar.Color = hpc
+                                d.HpBg.Size = Vector2.new(4, h); d.HpBg.Position = Vector2.new(x - 8, y)
+                                d.HpBar.Size = Vector2.new(4, h * hp); d.HpBar.Position = Vector2.new(x - 8, y + h * (1 - hp)); d.HpBar.Color = hpc
                                 if C.ESP_HPText then
                                     d.HpText.Text = string.format("%d", math.floor(hum.Health))
-                                    d.HpText.Position = Vector2.new(x - 10, y - 15)
-                                    d.HpText.Color = hpc
+                                    d.HpText.Position = Vector2.new(x - 10, y - 15); d.HpText.Color = hpc
                                 end
                             end
                             if C.ESP_DistBar then
                                 local frac = math.clamp(1 - dist / C.ESP_MaxDist, 0, 1)
-                                d.DistBarBg.Visible = true
-                                d.DistBarBg.Size = Vector2.new(w, 3)
+                                d.DistBarBg.Visible = true; d.DistBarBg.Size = Vector2.new(w, 3)
                                 d.DistBarBg.Position = Vector2.new(x, y + h + 18)
-                                d.DistBarFg.Visible = true
-                                d.DistBarFg.Size = Vector2.new(w * frac, 3)
-                                d.DistBarFg.Position = Vector2.new(x, y + h + 18)
-                                d.DistBarFg.Color = col
+                                d.DistBarFg.Visible = true; d.DistBarFg.Size = Vector2.new(w * frac, 3)
+                                d.DistBarFg.Position = Vector2.new(x, y + h + 18); d.DistBarFg.Color = col
                             else
-                                d.DistBarBg.Visible = false
-                                d.DistBarFg.Visible = false
+                                d.DistBarBg.Visible = false; d.DistBarFg.Visible = false
                             end
                             if C.ESP_Skel then
                                 for i, pair in ipairs(BONE_PAIRS) do
-                                    local a = char:FindFirstChild(pair[1])
-                                    local b = char:FindFirstChild(pair[2])
+                                    local a = char:FindFirstChild(pair[1]); local b = char:FindFirstChild(pair[2])
                                     local l = d.Bones[i]
                                     if a and b then
                                         local pa, onA = Camera:WorldToViewportPoint(a.Position)
                                         local pb, onB = Camera:WorldToViewportPoint(b.Position)
                                         if onA and onB then
-                                            l.From = Vector2.new(pa.X, pa.Y)
-                                            l.To = Vector2.new(pb.X, pb.Y)
-                                            l.Color = col
-                                            l.Visible = true
+                                            l.From = Vector2.new(pa.X, pa.Y); l.To = Vector2.new(pb.X, pb.Y)
+                                            l.Color = col; l.Visible = true
                                         else l.Visible = false end
                                     else l.Visible = false end
                                 end
@@ -650,26 +567,19 @@ local function UpdateVehicleESP()
                         w = math.clamp(math.abs(corner.X - sp.X) * 2, 22, 600)
                         h = math.clamp(math.abs(corner.Y - sp.Y) * 2, 22, 600)
                     else
-                        local s = math.clamp(8000 / math.max(dist, 1), 24, 300)
-                        w, h = s, s
+                        local s = math.clamp(8000 / math.max(dist, 1), 24, 300); w, h = s, s
                     end
                     d.Box.Visible = C.V_ESP_Box
                     if C.V_ESP_Box then
-                        d.Box.Size = Vector2.new(w, h)
-                        d.Box.Position = Vector2.new(sp.X - w * 0.5, sp.Y - h * 0.5)
-                        d.Box.Color = C.ColVehicle
+                        d.Box.Size = Vector2.new(w, h); d.Box.Position = Vector2.new(sp.X - w * 0.5, sp.Y - h * 0.5); d.Box.Color = C.ColVehicle
                     end
                     d.Name.Visible = C.V_ESP_Name
                     if C.V_ESP_Name then
-                        d.Name.Text = m.Name
-                        d.Name.Position = Vector2.new(sp.X, sp.Y - h * 0.5 - 18)
-                        d.Name.Color = C.ColVehicle
+                        d.Name.Text = m.Name; d.Name.Position = Vector2.new(sp.X, sp.Y - h * 0.5 - 18); d.Name.Color = C.ColVehicle
                     end
                     d.Dist.Visible = C.V_ESP_Dist
                     if C.V_ESP_Dist then
-                        d.Dist.Text = tostring(math.floor(dist)) .. "m"
-                        d.Dist.Position = Vector2.new(sp.X, sp.Y + h * 0.5 + 2)
-                        d.Dist.Color = C.ColVehicle
+                        d.Dist.Text = tostring(math.floor(dist)) .. "m"; d.Dist.Position = Vector2.new(sp.X, sp.Y + h * 0.5 + 2); d.Dist.Color = C.ColVehicle
                     end
                 else
                     for _, v in pairs(d) do v.Visible = false end
@@ -693,64 +603,28 @@ local function ApplyHitbox()
             if hrp then
                 if C.HitboxExp then
                     hrp.Size = Vector3.new(C.HitboxSize, C.HitboxSize, C.HitboxSize)
-                    hrp.Transparency = 0.7
-                    hrp.CanCollide = false
+                    hrp.Transparency = 0.7; hrp.CanCollide = false
                 else
-                    hrp.Size = Vector3.new(2, 2, 1)
-                    hrp.Transparency = 1
-                    hrp.CanCollide = true
+                    hrp.Size = Vector3.new(2, 2, 1); hrp.Transparency = 1; hrp.CanCollide = true
                 end
             end
         end
     end
 end
 
--- ═══════════════ CROSSHAIR + HITMARKER ═══════════════
+-- ═══════════════ CROSSHAIR ═══════════════
 local CH1 = TrackDraw(Drawing.new("Line"))
 local CH2 = TrackDraw(Drawing.new("Line"))
 CH1.Thickness = 2; CH2.Thickness = 2
 CH1.Color = C.ColNeon; CH2.Color = C.ColNeon
 
-local Hitmarker = TrackDraw(Drawing.new("Text"))
-Hitmarker.Text = "+"
-Hitmarker.Size = 24
-Hitmarker.Center = true
-Hitmarker.Outline = true
-Hitmarker.Color = Color3.fromRGB(255, 50, 50)
-Hitmarker.Visible = false
-local hitmarkerUntil = 0
-
 local function UpdateCrosshair()
-    if not C.Crosshair then
-        CH1.Visible = false; CH2.Visible = false
-        return
-    end
+    if not C.Crosshair then CH1.Visible = false; CH2.Visible = false; return end
     local cx, cy = Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.5
     local s = C.CH_Size
     CH1.From = Vector2.new(cx - s, cy); CH1.To = Vector2.new(cx + s, cy); CH1.Visible = true
     CH2.From = Vector2.new(cx, cy - s); CH2.To = Vector2.new(cx, cy + s); CH2.Visible = true
 end
-
-local function FlashHitmarker()
-    if not C.Hitmarker then return end
-    local cx, cy = Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.5
-    Hitmarker.Position = Vector2.new(cx, cy)
-    Hitmarker.Visible = true
-    hitmarkerUntil = tick() + 0.15
-end
-
-TrackConn(WS.DescendantAdded:Connect(function(inst)
-    if inst:IsA("Humanoid") then
-        local char = inst.Parent
-        if char and char:FindFirstChild("HumanoidRootPart") and Players:GetPlayerFromCharacter(char) then
-            TrackConn(inst.HealthChanged:Connect(function(hp)
-                if hp < inst.MaxHealth and Players:GetPlayerFromCharacter(char) ~= LP then
-                    FlashHitmarker()
-                end
-            end))
-        end
-    end
-end))
 
 -- ═══════════════ TP ═══════════════
 local function TPBase()
@@ -866,66 +740,72 @@ local function TPNearestEnemy()
     return false
 end
 
--- ═══════════════ UI ═══════════════
-local Combat = Window:CreateTab("Combat")
-local Visual = Window:CreateTab("Visuals")
-local Vehicles = Window:CreateTab("Vehicles")
-local TP = Window:CreateTab("Teleport")
-local Settings = Window:CreateTab("Settings")
+-- ═══════════════ ORION UI ═══════════════
+local Window = OrionLib:MakeWindow({
+    Name = "MeowMod V3.1",
+    HidePremium = false,
+    SaveConfig = true,
+    ConfigFolder = "MeowMod",
+    IntroEnabled = false,
+})
 
-Combat:CreateToggle({ Name = "Silent Aim", CurrentValue = C.Silent, Flag = "silent", Callback = function(v) C.Silent = v end })
-Combat:CreateSlider({ Name = "FOV %", Range = {5, 100}, Increment = 1, Suffix = "%", CurrentValue = C.FOVPercent, Flag = "fov", Callback = function(v) C.FOVPercent = v end })
-Combat:CreateSlider({ Name = "Max Distance", Range = {500, 5000}, Increment = 100, Suffix = "m", CurrentValue = C.MaxDist, Flag = "maxdist", Callback = function(v) C.MaxDist = v end })
-Combat:CreateSlider({ Name = "Prediction X (x10)", Range = {5, 30}, Increment = 1, CurrentValue = math.floor(C.Prediction * 10), Flag = "predx", Callback = function(v) C.Prediction = v / 10 end })
-Combat:CreateSlider({ Name = "Prediction Y (x10)", Range = {5, 30}, Increment = 1, CurrentValue = math.floor(C.PredictionY * 10), Flag = "predy", Callback = function(v) C.PredictionY = v / 10 end })
-Combat:CreateDropdown({ Name = "Priority", Options = {"distance", "health", "threat", "fov"}, CurrentOption = {C.PriorityMode}, Flag = "prio", Callback = function(o) C.PriorityMode = o[1] end })
-Combat:CreateToggle({ Name = "Headshot", CurrentValue = C.Headshot, Flag = "headshot", Callback = function(v) C.Headshot = v end })
-Combat:CreateToggle({ Name = "Wall Check", CurrentValue = C.WallCheck, Flag = "wall", Callback = function(v) C.WallCheck = v end })
-Combat:CreateToggle({ Name = "Bypass", CurrentValue = C.Bypass, Flag = "bypass", Callback = function(v) C.Bypass = v end })
-Combat:CreateSlider({ Name = "Bypass Spread", Range = {0, 30}, Increment = 1, CurrentValue = math.floor(C.BypassSpread * 100), Flag = "bspread", Callback = function(v) C.BypassSpread = v / 100 end })
-Combat:CreateDropdown({ Name = "Team Filter", Options = {"all", "enemy", "my"}, CurrentOption = {C.TeamFilter}, Flag = "team", Callback = function(o) C.TeamFilter = o[1] end })
-Combat:CreateToggle({ Name = "Hitbox Expander", CurrentValue = C.HitboxExp, Flag = "hitbox", Callback = function(v) C.HitboxExp = v; ApplyHitbox() end })
-Combat:CreateSlider({ Name = "Hitbox Size", Range = {2, 20}, Increment = 1, CurrentValue = C.HitboxSize, Flag = "hbsize", Callback = function(v) C.HitboxSize = v; ApplyHitbox() end })
-Combat:CreateToggle({ Name = "Hitmarker", CurrentValue = C.Hitmarker, Flag = "hitmark", Callback = function(v) C.Hitmarker = v end })
-Combat:CreateColorPicker({ Name = "Aim Color", Color = C.ColAim, Flag = "aimcol", Callback = function(c) C.ColAim = c; SilentLine.Color = c; FOVCircle.Color = c end })
+local Combat = Window:MakeTab({ Name = "Combat", Icon = "rbxassetid://4483345998" })
+local Visual = Window:MakeTab({ Name = "Visuals", Icon = "rbxassetid://4483345998" })
+local Vehicles = Window:MakeTab({ Name = "Vehicles", Icon = "rbxassetid://4483345998" })
+local TP = Window:MakeTab({ Name = "Teleport", Icon = "rbxassetid://4483345998" })
 
-Visual:CreateToggle({ Name = "ESP", CurrentValue = C.ESP, Flag = "esp", Callback = function(v) C.ESP = v end })
-Visual:CreateToggle({ Name = "Box", CurrentValue = C.ESP_Box, Flag = "espbox", Callback = function(v) C.ESP_Box = v end })
-Visual:CreateToggle({ Name = "Name", CurrentValue = C.ESP_Name, Flag = "espname", Callback = function(v) C.ESP_Name = v end })
-Visual:CreateToggle({ Name = "Distance", CurrentValue = C.ESP_Dist, Flag = "espdist", Callback = function(v) C.ESP_Dist = v end })
-Visual:CreateToggle({ Name = "HP Bar", CurrentValue = C.ESP_HP, Flag = "esphp", Callback = function(v) C.ESP_HP = v end })
-Visual:CreateToggle({ Name = "HP Text", CurrentValue = C.ESP_HPText, Flag = "esphpt", Callback = function(v) C.ESP_HPText = v end })
-Visual:CreateToggle({ Name = "Skeleton", CurrentValue = C.ESP_Skel, Flag = "espskel", Callback = function(v) C.ESP_Skel = v end })
-Visual:CreateToggle({ Name = "Line", CurrentValue = C.ESP_Line, Flag = "espline", Callback = function(v) C.ESP_Line = v end })
-Visual:CreateToggle({ Name = "Offscreen Arrows", CurrentValue = C.ESP_Offscr, Flag = "espoff", Callback = function(v) C.ESP_Offscr = v end })
-Visual:CreateToggle({ Name = "Distance Bar", CurrentValue = C.ESP_DistBar, Flag = "espdb", Callback = function(v) C.ESP_DistBar = v end })
-Visual:CreateSlider({ Name = "ESP Max Distance", Range = {500, 5000}, Increment = 100, Suffix = "m", CurrentValue = C.ESP_MaxDist, Flag = "espmax", Callback = function(v) C.ESP_MaxDist = v end })
-Visual:CreateToggle({ Name = "Crosshair", CurrentValue = C.Crosshair, Flag = "ch", Callback = function(v) C.Crosshair = v end })
-Visual:CreateSlider({ Name = "Crosshair Size", Range = {5, 30}, Increment = 1, CurrentValue = C.CH_Size, Flag = "chsize", Callback = function(v) C.CH_Size = v end })
-Visual:CreateColorPicker({ Name = "Ally Color", Color = C.ColAlly, Flag = "colally", Callback = function(c) C.ColAlly = c end })
-Visual:CreateColorPicker({ Name = "Enemy Color", Color = C.ColEnemy, Flag = "colenemy", Callback = function(c) C.ColEnemy = c end })
-Visual:CreateColorPicker({ Name = "Crosshair Color", Color = C.ColNeon, Flag = "colch", Callback = function(c) C.ColNeon = c; CH1.Color = c; CH2.Color = c end })
+-- Combat
+Combat:AddToggle({ Name = "Silent Aim", Default = C.Silent, Flag = "silent", Callback = function(v) C.Silent = v end })
+Combat:AddSlider({ Name = "FOV %", Min = 5, Max = 100, Default = C.FOVPercent, Color = C.ColNeon, ValueName = "%", Flag = "fov", Callback = function(v) C.FOVPercent = v end })
+Combat:AddSlider({ Name = "Max Distance", Min = 500, Max = 5000, Default = C.MaxDist, Color = C.ColNeon, ValueName = "m", Flag = "maxdist", Callback = function(v) C.MaxDist = v end })
+Combat:AddSlider({ Name = "Prediction X (x10)", Min = 5, Max = 30, Default = math.floor(C.Prediction * 10), Color = C.ColNeon, Flag = "predx", Callback = function(v) C.Prediction = v / 10 end })
+Combat:AddSlider({ Name = "Prediction Y (x10)", Min = 5, Max = 30, Default = math.floor(C.PredictionY * 10), Color = C.ColNeon, Flag = "predy", Callback = function(v) C.PredictionY = v / 10 end })
+Combat:AddDropdown({ Name = "Priority", Options = {"distance", "health", "fov"}, Default = C.PriorityMode, Flag = "prio", Callback = function(o) C.PriorityMode = o end })
+Combat:AddToggle({ Name = "Headshot", Default = C.Headshot, Flag = "headshot", Callback = function(v) C.Headshot = v end })
+Combat:AddToggle({ Name = "Wall Check", Default = C.WallCheck, Flag = "wall", Callback = function(v) C.WallCheck = v end })
+Combat:AddToggle({ Name = "Bypass", Default = C.Bypass, Flag = "bypass", Callback = function(v) C.Bypass = v end })
+Combat:AddSlider({ Name = "Bypass Spread", Min = 0, Max = 30, Default = math.floor(C.BypassSpread * 100), Color = C.ColNeon, ValueName = "cm", Flag = "bspread", Callback = function(v) C.BypassSpread = v / 100 end })
+Combat:AddDropdown({ Name = "Team Filter", Options = {"all", "enemy", "my"}, Default = C.TeamFilter, Flag = "team", Callback = function(o) C.TeamFilter = o end })
+Combat:AddToggle({ Name = "Hitbox Expander", Default = C.HitboxExp, Flag = "hitbox", Callback = function(v) C.HitboxExp = v; ApplyHitbox() end })
+Combat:AddSlider({ Name = "Hitbox Size", Min = 2, Max = 20, Default = C.HitboxSize, Color = C.ColNeon, Flag = "hbsize", Callback = function(v) C.HitboxSize = v; ApplyHitbox() end })
+Combat:AddColorpicker({ Name = "Aim Color", Default = C.ColAim, Flag = "aimcol", Callback = function(c) C.ColAim = c; SilentLine.Color = c; FOVCircle.Color = c end })
 
-Vehicles:CreateToggle({ Name = "Vehicle ESP", CurrentValue = C.V_ESP, Flag = "vesp", Callback = function(v) C.V_ESP = v end })
-Vehicles:CreateToggle({ Name = "Box", CurrentValue = C.V_ESP_Box, Flag = "vespbox", Callback = function(v) C.V_ESP_Box = v end })
-Vehicles:CreateToggle({ Name = "Name", CurrentValue = C.V_ESP_Name, Flag = "vespname", Callback = function(v) C.V_ESP_Name = v end })
-Vehicles:CreateToggle({ Name = "Distance", CurrentValue = C.V_ESP_Dist, Flag = "vespdist", Callback = function(v) C.V_ESP_Dist = v end })
-Vehicles:CreateSlider({ Name = "Max Distance", Range = {100, 10000}, Increment = 100, Suffix = "m", CurrentValue = C.V_ESP_MaxDist, Flag = "vespmax", Callback = function(v) C.V_ESP_MaxDist = v end })
-Vehicles:CreateColorPicker({ Name = "Color", Color = C.ColVehicle, Flag = "colveh", Callback = function(c) C.ColVehicle = c end })
+-- Visuals
+Visual:AddToggle({ Name = "ESP", Default = C.ESP, Flag = "esp", Callback = function(v) C.ESP = v end })
+Visual:AddToggle({ Name = "Box", Default = C.ESP_Box, Flag = "espbox", Callback = function(v) C.ESP_Box = v end })
+Visual:AddToggle({ Name = "Name", Default = C.ESP_Name, Flag = "espname", Callback = function(v) C.ESP_Name = v end })
+Visual:AddToggle({ Name = "Distance", Default = C.ESP_Dist, Flag = "espdist", Callback = function(v) C.ESP_Dist = v end })
+Visual:AddToggle({ Name = "HP Bar", Default = C.ESP_HP, Flag = "esphp", Callback = function(v) C.ESP_HP = v end })
+Visual:AddToggle({ Name = "HP Text", Default = C.ESP_HPText, Flag = "esphpt", Callback = function(v) C.ESP_HPText = v end })
+Visual:AddToggle({ Name = "Skeleton", Default = C.ESP_Skel, Flag = "espskel", Callback = function(v) C.ESP_Skel = v end })
+Visual:AddToggle({ Name = "Line", Default = C.ESP_Line, Flag = "espline", Callback = function(v) C.ESP_Line = v end })
+Visual:AddToggle({ Name = "Offscreen Arrows", Default = C.ESP_Offscr, Flag = "espoff", Callback = function(v) C.ESP_Offscr = v end })
+Visual:AddToggle({ Name = "Distance Bar", Default = C.ESP_DistBar, Flag = "espdb", Callback = function(v) C.ESP_DistBar = v end })
+Visual:AddSlider({ Name = "ESP Max Distance", Min = 500, Max = 5000, Default = C.ESP_MaxDist, Color = C.ColNeon, ValueName = "m", Flag = "espmax", Callback = function(v) C.ESP_MaxDist = v end })
+Visual:AddToggle({ Name = "Crosshair", Default = C.Crosshair, Flag = "ch", Callback = function(v) C.Crosshair = v end })
+Visual:AddSlider({ Name = "Crosshair Size", Min = 5, Max = 30, Default = C.CH_Size, Color = C.ColNeon, Flag = "chsize", Callback = function(v) C.CH_Size = v end })
+Visual:AddColorpicker({ Name = "Ally Color", Default = C.ColAlly, Flag = "colally", Callback = function(c) C.ColAlly = c end })
+Visual:AddColorpicker({ Name = "Enemy Color", Default = C.ColEnemy, Flag = "colenemy", Callback = function(c) C.ColEnemy = c end })
+Visual:AddColorpicker({ Name = "Crosshair Color", Default = C.ColNeon, Flag = "colch", Callback = function(c) C.ColNeon = c; CH1.Color = c; CH2.Color = c end })
 
-TP:CreateToggle({ Name = "Drop to ground", CurrentValue = C.TP_DropToGround, Flag = "tpdrop", Callback = function(v) C.TP_DropToGround = v end })
-TP:CreateSlider({ Name = "Safe drop", Range = {1, 20}, Increment = 1, CurrentValue = C.TP_SafeDrop, Flag = "tpsafe", Callback = function(v) C.TP_SafeDrop = v end })
-TP:CreateButton({ Name = "TP Base", Callback = TPBase })
-TP:CreateButton({ Name = "TP Airdrop", Callback = TPAirdrop })
-TP:CreateButton({ Name = "TP Crashed UAV", Callback = TPCrashedUAV })
-TP:CreateButton({ Name = "TP Capture", Callback = TPCapture })
-TP:CreateButton({ Name = "TP Nearest Enemy", Callback = TPNearestEnemy })
+-- Vehicles
+Vehicles:AddToggle({ Name = "Vehicle ESP", Default = C.V_ESP, Flag = "vesp", Callback = function(v) C.V_ESP = v end })
+Vehicles:AddToggle({ Name = "Box", Default = C.V_ESP_Box, Flag = "vespbox", Callback = function(v) C.V_ESP_Box = v end })
+Vehicles:AddToggle({ Name = "Name", Default = C.V_ESP_Name, Flag = "vespname", Callback = function(v) C.V_ESP_Name = v end })
+Vehicles:AddToggle({ Name = "Distance", Default = C.V_ESP_Dist, Flag = "vespdist", Callback = function(v) C.V_ESP_Dist = v end })
+Vehicles:AddSlider({ Name = "Max Distance", Min = 100, Max = 10000, Default = C.V_ESP_MaxDist, Color = C.ColNeon, ValueName = "m", Flag = "vespmax", Callback = function(v) C.V_ESP_MaxDist = v end })
+Vehicles:AddColorpicker({ Name = "Color", Default = C.ColVehicle, Flag = "colveh", Callback = function(c) C.ColVehicle = c end })
 
-Settings:CreateButton({ Name = "Save Config", Callback = function() Rayfield:SaveConfiguration() end })
-Settings:CreateButton({ Name = "Full Unload", Callback = function()
-    local fn = getgenv().MeowModUnload
-    if fn then fn() end
-end })
+-- Teleport
+TP:AddToggle({ Name = "Drop to ground", Default = C.TP_DropToGround, Flag = "tpdrop", Callback = function(v) C.TP_DropToGround = v end })
+TP:AddSlider({ Name = "Safe drop", Min = 1, Max = 20, Default = C.TP_SafeDrop, Color = C.ColNeon, Flag = "tpsafe", Callback = function(v) C.TP_SafeDrop = v end })
+TP:AddButton({ Name = "TP Base", Callback = TPBase })
+TP:AddButton({ Name = "TP Airdrop", Callback = TPAirdrop })
+TP:AddButton({ Name = "TP Crashed UAV", Callback = TPCrashedUAV })
+TP:AddButton({ Name = "TP Capture", Callback = TPCapture })
+TP:AddButton({ Name = "TP Nearest Enemy", Callback = TPNearestEnemy })
+
+OrionLib:Init()
 
 -- ═══════════════ RENDER LOOP ═══════════════
 local espAccum, ESP_INTERVAL = 0, 1 / 30
@@ -934,14 +814,13 @@ local chAccum,  CH_INTERVAL  = 0, 1 / 30
 
 TrackConn(RunService.RenderStepped:Connect(function(dt)
     if getgenv().MeowModUnloaded then return end
-    pcall(function() UpdateAim(dt) end)
+    pcall(UpdateAim)
     espAccum = espAccum + dt
     if espAccum >= ESP_INTERVAL then espAccum = 0; pcall(UpdateESP) end
     vehAccum = vehAccum + dt
     if vehAccum >= VEH_INTERVAL then vehAccum = 0; pcall(UpdateVehicleESP) end
     chAccum = chAccum + dt
     if chAccum >= CH_INTERVAL then chAccum = 0; pcall(UpdateCrosshair) end
-    if Hitmarker.Visible and tick() > hitmarkerUntil then Hitmarker.Visible = false end
     if C.HitboxExp then pcall(ApplyHitbox) end
 end))
 
@@ -949,36 +828,33 @@ end))
 getgenv().MeowModUnload = function()
     if getgenv().MeowModUnloaded then return end
     getgenv().MeowModUnloaded = true
-    removeNamecallHook()
+    removeHook()
     for _, c in ipairs(Connections) do
         pcall(function() if typeof(c) == "RBXScriptConnection" then c:Disconnect() end end)
     end
     Connections = {}
     for _, d in ipairs(Drawings) do pcall(function() d:Remove() end) end
     Drawings = {}
-    ESP = {}
-    VehicleESP = {}
-    VehicleSeats = {}
+    ESP = {}; VehicleESP = {}; VehicleSeats = {}
     for _, p in ipairs(Players:GetPlayers()) do
         local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
             pcall(function()
-                hrp.Size = Vector3.new(2, 2, 1)
-                hrp.Transparency = 1
-                hrp.CanCollide = true
+                hrp.Size = Vector3.new(2, 2, 1); hrp.Transparency = 1; hrp.CanCollide = true
             end)
         end
     end
     silentTarget = nil; silentActive = false
-    pcall(function() Rayfield:Destroy() end)
+    pcall(function() OrionLib:Destroy() end)
     pcall(function()
         getgenv().MeowModUnload = nil
         getgenv().MeowModUnloaded = nil
     end)
 end
 
-Rayfield:Notify({
-    Title = "MeowMod V4.9",
-    Content = "Silent aim as v3. Camera free.",
-    Duration = 5,
+OrionLib:MakeNotification({
+    Name = "MeowMod V3.1",
+    Content = "Orion UI loaded. Silent aim as v3.",
+    Image = "rbxassetid://4483345998",
+    Time = 5,
 })
