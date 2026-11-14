@@ -1,5 +1,6 @@
--- // MEOWMOD | V3.3 | KYRILIB (DELTA MOBILE) + V3 CORE
--- UI: KyriLib (mobile support, raw.githubusercontent → Delta тянет).
+-- // MEOWMOD | V3.4 | AMETHYST UI (DELTA MOBILE) + V3 CORE
+-- UI: Amethyst — Rayfield-подобная библиотека, полный mobile support [citation:8].
+-- Загрузка с raw.githubusercontent.com — Delta тянет без редиректов.
 -- Весь v3: silent aim (WS.Raycast), ESP, vehicle ESP, TP, hitbox, crosshair.
 -- Камера не залипает. Ничего не пропущено.
 
@@ -18,12 +19,19 @@ local Connections, Drawings = {}, {}
 local function TrackConn(c) table.insert(Connections, c); return c end
 local function TrackDraw(d) table.insert(Drawings, d); return d end
 
--- ═══════════════ KYRILIB BOOT ═══════════════
-local kyri = loadstring(game:HttpGet("https://raw.githubusercontent.com/Justanewplayer19/KyriLib/refs/heads/main/source.lua"))()
+-- ═══════════════ AMETHYST UI BOOT ═══════════════
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/J0se-j/My-Lua-Library/refs/heads/main/Booting-the-library.lua"))()
 
-local w = kyri.new("MeowMod V3.3", {
-    GameName = "MeowMod",
-    AutoLoad = "default",
+local Window = Library:CreateWindow({
+    Name = "MeowMod V3.4",
+    LoadingTitle = "MeowMod",
+    LoadingSubtitle = "Amethyst UI",
+    ToggleUIKeybind = Enum.KeyCode.RightControl,
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "MeowMod",
+        FileName = "v3_4"
+    }
 })
 
 -- ═══════════════ CONFIG ═══════════════
@@ -746,55 +754,62 @@ local function TPNearestEnemy()
     return false
 end
 
--- ═══════════════ KYRILIB UI ═══════════════
-local main = w:tab("Combat", "crosshair")
-local vis  = w:tab("Visuals", "eye")
-local veh  = w:tab("Vehicles", "car")
-local tpt  = w:tab("Teleport", "map-pin")
+-- ═══════════════ AMETHYST UI TABS ═══════════════
+local Combat = Window:CreateTab("Combat", 4483362458)
+local Visual = Window:CreateTab("Visuals", 4483362458)
+local Vehicles = Window:CreateTab("Vehicles", 4483362458)
+local TP = Window:CreateTab("Teleport", 4483362458)
 
 -- Combat
-main:toggle("Silent Aim", C.Silent, function(v) C.Silent = v end)
-main:slider("FOV %", 5, 100, C.FOVPercent, function(v) C.FOVPercent = v end)
-main:slider("Max Distance", 500, 5000, C.MaxDist, function(v) C.MaxDist = v end)
-main:slider("Prediction X (x10)", 5, 30, math.floor(C.Prediction * 10), function(v) C.Prediction = v / 10 end)
-main:slider("Prediction Y (x10)", 5, 30, math.floor(C.PredictionY * 10), function(v) C.PredictionY = v / 10 end)
-main:toggle("Headshot", C.Headshot, function(v) C.Headshot = v end)
-main:toggle("Wall Check", C.WallCheck, function(v) C.WallCheck = v end)
-main:toggle("Bypass", C.Bypass, function(v) C.Bypass = v end)
-main:slider("Bypass Spread", 0, 30, math.floor(C.BypassSpread * 100), function(v) C.BypassSpread = v / 100 end)
-main:toggle("Hitbox Expander", C.HitboxExp, function(v) C.HitboxExp = v; ApplyHitbox() end)
-main:slider("Hitbox Size", 2, 20, C.HitboxSize, function(v) C.HitboxSize = v; ApplyHitbox() end)
+Combat:CreateToggle({ Name = "Silent Aim", CurrentValue = C.Silent, Flag = "silent", Callback = function(v) C.Silent = v end })
+Combat:CreateSlider({ Name = "FOV %", Range = {5, 100}, Increment = 1, Suffix = "%", CurrentValue = C.FOVPercent, Flag = "fov", Callback = function(v) C.FOVPercent = v end })
+Combat:CreateSlider({ Name = "Max Distance", Range = {500, 5000}, Increment = 100, Suffix = "m", CurrentValue = C.MaxDist, Flag = "maxdist", Callback = function(v) C.MaxDist = v end })
+Combat:CreateSlider({ Name = "Prediction X (x10)", Range = {5, 30}, Increment = 1, CurrentValue = math.floor(C.Prediction * 10), Flag = "predx", Callback = function(v) C.Prediction = v / 10 end })
+Combat:CreateSlider({ Name = "Prediction Y (x10)", Range = {5, 30}, Increment = 1, CurrentValue = math.floor(C.PredictionY * 10), Flag = "predy", Callback = function(v) C.PredictionY = v / 10 end })
+Combat:CreateDropdown({ Name = "Priority", Options = {"distance", "health", "fov"}, CurrentOption = {C.PriorityMode}, Flag = "prio", Callback = function(o) C.PriorityMode = o[1] end })
+Combat:CreateToggle({ Name = "Headshot", CurrentValue = C.Headshot, Flag = "headshot", Callback = function(v) C.Headshot = v end })
+Combat:CreateToggle({ Name = "Wall Check", CurrentValue = C.WallCheck, Flag = "wall", Callback = function(v) C.WallCheck = v end })
+Combat:CreateToggle({ Name = "Bypass", CurrentValue = C.Bypass, Flag = "bypass", Callback = function(v) C.Bypass = v end })
+Combat:CreateSlider({ Name = "Bypass Spread", Range = {0, 30}, Increment = 1, CurrentValue = math.floor(C.BypassSpread * 100), Flag = "bspread", Callback = function(v) C.BypassSpread = v / 100 end })
+Combat:CreateDropdown({ Name = "Team Filter", Options = {"all", "enemy", "my"}, CurrentOption = {C.TeamFilter}, Flag = "team", Callback = function(o) C.TeamFilter = o[1] end })
+Combat:CreateToggle({ Name = "Hitbox Expander", CurrentValue = C.HitboxExp, Flag = "hitbox", Callback = function(v) C.HitboxExp = v; ApplyHitbox() end })
+Combat:CreateSlider({ Name = "Hitbox Size", Range = {2, 20}, Increment = 1, CurrentValue = C.HitboxSize, Flag = "hbsize", Callback = function(v) C.HitboxSize = v; ApplyHitbox() end })
+Combat:CreateColorPicker({ Name = "Aim Color", Color = C.ColAim, Flag = "aimcol", Callback = function(c) C.ColAim = c; SilentLine.Color = c; FOVCircle.Color = c end })
 
 -- Visuals
-vis:toggle("ESP", C.ESP, function(v) C.ESP = v end)
-vis:toggle("Box", C.ESP_Box, function(v) C.ESP_Box = v end)
-vis:toggle("Name", C.ESP_Name, function(v) C.ESP_Name = v end)
-vis:toggle("Distance", C.ESP_Dist, function(v) C.ESP_Dist = v end)
-vis:toggle("HP Bar", C.ESP_HP, function(v) C.ESP_HP = v end)
-vis:toggle("HP Text", C.ESP_HPText, function(v) C.ESP_HPText = v end)
-vis:toggle("Skeleton", C.ESP_Skel, function(v) C.ESP_Skel = v end)
-vis:toggle("Line", C.ESP_Line, function(v) C.ESP_Line = v end)
-vis:toggle("Offscreen Arrows", C.ESP_Offscr, function(v) C.ESP_Offscr = v end)
-vis:toggle("Distance Bar", C.ESP_DistBar, function(v) C.ESP_DistBar = v end)
-vis:slider("ESP Max Distance", 500, 5000, C.ESP_MaxDist, function(v) C.ESP_MaxDist = v end)
-vis:toggle("Crosshair", C.Crosshair, function(v) C.Crosshair = v end)
-vis:slider("Crosshair Size", 5, 30, C.CH_Size, function(v) C.CH_Size = v end)
+Visual:CreateToggle({ Name = "ESP", CurrentValue = C.ESP, Flag = "esp", Callback = function(v) C.ESP = v end })
+Visual:CreateToggle({ Name = "Box", CurrentValue = C.ESP_Box, Flag = "espbox", Callback = function(v) C.ESP_Box = v end })
+Visual:CreateToggle({ Name = "Name", CurrentValue = C.ESP_Name, Flag = "espname", Callback = function(v) C.ESP_Name = v end })
+Visual:CreateToggle({ Name = "Distance", CurrentValue = C.ESP_Dist, Flag = "espdist", Callback = function(v) C.ESP_Dist = v end })
+Visual:CreateToggle({ Name = "HP Bar", CurrentValue = C.ESP_HP, Flag = "esphp", Callback = function(v) C.ESP_HP = v end })
+Visual:CreateToggle({ Name = "HP Text", CurrentValue = C.ESP_HPText, Flag = "esphpt", Callback = function(v) C.ESP_HPText = v end })
+Visual:CreateToggle({ Name = "Skeleton", CurrentValue = C.ESP_Skel, Flag = "espskel", Callback = function(v) C.ESP_Skel = v end })
+Visual:CreateToggle({ Name = "Line", CurrentValue = C.ESP_Line, Flag = "espline", Callback = function(v) C.ESP_Line = v end })
+Visual:CreateToggle({ Name = "Offscreen Arrows", CurrentValue = C.ESP_Offscr, Flag = "espoff", Callback = function(v) C.ESP_Offscr = v end })
+Visual:CreateToggle({ Name = "Distance Bar", CurrentValue = C.ESP_DistBar, Flag = "espdb", Callback = function(v) C.ESP_DistBar = v end })
+Visual:CreateSlider({ Name = "ESP Max Distance", Range = {500, 5000}, Increment = 100, Suffix = "m", CurrentValue = C.ESP_MaxDist, Flag = "espmax", Callback = function(v) C.ESP_MaxDist = v end })
+Visual:CreateToggle({ Name = "Crosshair", CurrentValue = C.Crosshair, Flag = "ch", Callback = function(v) C.Crosshair = v end })
+Visual:CreateSlider({ Name = "Crosshair Size", Range = {5, 30}, Increment = 1, CurrentValue = C.CH_Size, Flag = "chsize", Callback = function(v) C.CH_Size = v end })
+Visual:CreateColorPicker({ Name = "Ally Color", Color = C.ColAlly, Flag = "colally", Callback = function(c) C.ColAlly = c end })
+Visual:CreateColorPicker({ Name = "Enemy Color", Color = C.ColEnemy, Flag = "colenemy", Callback = function(c) C.ColEnemy = c end })
+Visual:CreateColorPicker({ Name = "Crosshair Color", Color = C.ColNeon, Flag = "colch", Callback = function(c) C.ColNeon = c; CH1.Color = c; CH2.Color = c end })
 
 -- Vehicles
-veh:toggle("Vehicle ESP", C.V_ESP, function(v) C.V_ESP = v end)
-veh:toggle("Box", C.V_ESP_Box, function(v) C.V_ESP_Box = v end)
-veh:toggle("Name", C.V_ESP_Name, function(v) C.V_ESP_Name = v end)
-veh:toggle("Distance", C.V_ESP_Dist, function(v) C.V_ESP_Dist = v end)
-veh:slider("Max Distance", 100, 10000, C.V_ESP_MaxDist, function(v) C.V_ESP_MaxDist = v end)
+Vehicles:CreateToggle({ Name = "Vehicle ESP", CurrentValue = C.V_ESP, Flag = "vesp", Callback = function(v) C.V_ESP = v end })
+Vehicles:CreateToggle({ Name = "Box", CurrentValue = C.V_ESP_Box, Flag = "vespbox", Callback = function(v) C.V_ESP_Box = v end })
+Vehicles:CreateToggle({ Name = "Name", CurrentValue = C.V_ESP_Name, Flag = "vespname", Callback = function(v) C.V_ESP_Name = v end })
+Vehicles:CreateToggle({ Name = "Distance", CurrentValue = C.V_ESP_Dist, Flag = "vespdist", Callback = function(v) C.V_ESP_Dist = v end })
+Vehicles:CreateSlider({ Name = "Max Distance", Range = {100, 10000}, Increment = 100, Suffix = "m", CurrentValue = C.V_ESP_MaxDist, Flag = "vespmax", Callback = function(v) C.V_ESP_MaxDist = v end })
+Vehicles:CreateColorPicker({ Name = "Color", Color = C.ColVehicle, Flag = "colveh", Callback = function(c) C.ColVehicle = c end })
 
 -- Teleport
-tpt:toggle("Drop to ground", C.TP_DropToGround, function(v) C.TP_DropToGround = v end)
-tpt:slider("Safe drop", 1, 20, C.TP_SafeDrop, function(v) C.TP_SafeDrop = v end)
-tpt:button("TP Base", function() TPBase() end)
-tpt:button("TP Airdrop", function() TPAirdrop() end)
-tpt:button("TP Crashed UAV", function() TPCrashedUAV() end)
-tpt:button("TP Capture", function() TPCapture() end)
-tpt:button("TP Nearest Enemy", function() TPNearestEnemy() end)
+TP:CreateToggle({ Name = "Drop to ground", CurrentValue = C.TP_DropToGround, Flag = "tpdrop", Callback = function(v) C.TP_DropToGround = v end })
+TP:CreateSlider({ Name = "Safe drop", Range = {1, 20}, Increment = 1, CurrentValue = C.TP_SafeDrop, Flag = "tpsafe", Callback = function(v) C.TP_SafeDrop = v end })
+TP:CreateButton({ Name = "TP Base", Callback = TPBase })
+TP:CreateButton({ Name = "TP Airdrop", Callback = TPAirdrop })
+TP:CreateButton({ Name = "TP Crashed UAV", Callback = TPCrashedUAV })
+TP:CreateButton({ Name = "TP Capture", Callback = TPCapture })
+TP:CreateButton({ Name = "TP Nearest Enemy", Callback = TPNearestEnemy })
 
 -- ═══════════════ RENDER LOOP ═══════════════
 local espAccum, ESP_INTERVAL = 0, 1 / 30
@@ -834,11 +849,9 @@ getgenv().MeowModUnload = function()
         end
     end
     silentTarget = nil; silentActive = false
-    pcall(function() w:destroy() end)
+    pcall(function() Library:Destroy() end)
     pcall(function()
         getgenv().MeowModUnload = nil
         getgenv().MeowModUnloaded = nil
     end)
 end
-
-w:notify("MeowMod V3.3", "KyriLib mobile loaded. Silent aim as v3.", 5)
