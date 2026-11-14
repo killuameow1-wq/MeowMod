@@ -1,6 +1,5 @@
--- // MEOWMOD | V3.4 | AMETHYST UI (DELTA MOBILE) + V3 CORE
--- UI: Amethyst — Rayfield-подобная библиотека, полный mobile support [citation:8].
--- Загрузка с raw.githubusercontent.com — Delta тянет без редиректов.
+-- // MEOWMOD | V5.0 | CUSTOM MOBILE UI + V3 CORE
+-- UI: собственный на чистом ScreenGui. Ноль внешних загрузок. Delta mobile готов.
 -- Весь v3: silent aim (WS.Raycast), ESP, vehicle ESP, TP, hitbox, crosshair.
 -- Камера не залипает. Ничего не пропущено.
 
@@ -10,29 +9,16 @@ getgenv().MeowModUnloaded = false
 local Players    = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS        = game:GetService("UserInputService")
+local Tween      = game:GetService("TweenService")
 local WS         = game:GetService("Workspace")
 
 local LP     = Players.LocalPlayer
 local Camera = WS.CurrentCamera
+local PG     = LP:WaitForChild("PlayerGui")
 
 local Connections, Drawings = {}, {}
 local function TrackConn(c) table.insert(Connections, c); return c end
 local function TrackDraw(d) table.insert(Drawings, d); return d end
-
--- ═══════════════ AMETHYST UI BOOT ═══════════════
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/J0se-j/My-Lua-Library/refs/heads/main/Booting-the-library.lua"))()
-
-local Window = Library:CreateWindow({
-    Name = "MeowMod V3.4",
-    LoadingTitle = "MeowMod",
-    LoadingSubtitle = "Amethyst UI",
-    ToggleUIKeybind = Enum.KeyCode.RightControl,
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "MeowMod",
-        FileName = "v3_4"
-    }
-})
 
 -- ═══════════════ CONFIG ═══════════════
 local C = {
@@ -204,7 +190,6 @@ local function PickTarget()
     return best
 end
 
--- ─── хук: ТОЛЬКО Workspace:Raycast / FindPartOnRay ───
 local hookMT, oldNamecall, hookInstalled = nil, nil, false
 local _internal = false
 
@@ -754,62 +739,399 @@ local function TPNearestEnemy()
     return false
 end
 
--- ═══════════════ AMETHYST UI TABS ═══════════════
-local Combat = Window:CreateTab("Combat", 4483362458)
-local Visual = Window:CreateTab("Visuals", 4483362458)
-local Vehicles = Window:CreateTab("Vehicles", 4483362458)
-local TP = Window:CreateTab("Teleport", 4483362458)
+-- ═══════════════ CUSTOM MOBILE UI ═══════════════
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MeowModV5"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.Parent = PG
+
+-- Фон полупрозрачный затемняющий
+local Bg = Instance.new("Frame")
+Bg.Name = "Bg"
+Bg.Size = UDim2.fromScale(1, 1)
+Bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Bg.BackgroundTransparency = 0.5
+Bg.BorderSizePixel = 0
+Bg.Visible = false
+Bg.ZIndex = 1
+Bg.Parent = ScreenGui
+
+-- Плавающая кнопка открытия (тач-таргет крупный)
+local OpenBtn = Instance.new("TextButton")
+OpenBtn.Name = "OpenBtn"
+OpenBtn.Size = UDim2.fromOffset(56, 56)
+OpenBtn.Position = UDim2.new(0, 12, 0.5, -28)
+OpenBtn.BackgroundColor3 = C.ColNeon
+OpenBtn.Text = "M"
+OpenBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+OpenBtn.Font = Enum.Font.GothamBlack
+OpenBtn.TextSize = 22
+OpenBtn.BorderSizePixel = 0
+OpenBtn.Active = true
+OpenBtn.Draggable = true
+OpenBtn.ZIndex = 100
+OpenBtn.Parent = ScreenGui
+Instance.new("UICorner", OpenBtn).CornerRadius = UDim.new(0, 28)
+
+-- Главное окно
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = UDim2.fromOffset(340, 480)
+Main.Position = UDim2.fromScale(0.5, 0.5)
+Main.AnchorPoint = Vector2.new(0.5, 0.5)
+Main.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Draggable = true
+Main.Visible = false
+Main.ZIndex = 10
+Main.Parent = ScreenGui
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 14)
+local MainStroke = Instance.new("UIStroke", Main)
+MainStroke.Color = C.ColNeon
+MainStroke.Thickness = 1.5
+MainStroke.Transparency = 0.4
+
+-- Header
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, 0, 0, 52)
+Header.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+Header.BorderSizePixel = 0
+Header.ZIndex = 11
+Header.Parent = Main
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 14)
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -100, 1, 0)
+Title.Position = UDim2.new(0, 16, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "MEOW V5.0"
+Title.TextColor3 = C.ColNeon
+Title.Font = Enum.Font.GothamBlack
+Title.TextSize = 18
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.ZIndex = 12
+Title.Parent = Header
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.fromOffset(36, 36)
+CloseBtn.Position = UDim2.new(1, -46, 0, 8)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 70, 70)
+CloseBtn.Text = "×"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.Font = Enum.Font.GothamBlack
+CloseBtn.TextSize = 22
+CloseBtn.BorderSizePixel = 0
+CloseBtn.ZIndex = 12
+CloseBtn.Parent = Header
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 10)
+
+-- Tab bar (мобильный скролл горизонтальный)
+local TabBar = Instance.new("ScrollingFrame")
+TabBar.Size = UDim2.new(1, -16, 0, 48)
+TabBar.Position = UDim2.new(0, 8, 0, 60)
+TabBar.BackgroundTransparency = 1
+TabBar.BorderSizePixel = 0
+TabBar.ScrollBarThickness = 0
+TabBar.ScrollingDirection = Enum.ScrollingDirection.X
+TabBar.CanvasSize = UDim2.new(0, 500, 0, 0)
+TabBar.ZIndex = 11
+TabBar.Parent = Main
+local TabLayout = Instance.new("UIListLayout", TabBar)
+TabLayout.FillDirection = Enum.FillDirection.Horizontal
+TabLayout.Padding = UDim.new(0, 8)
+TabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local Pages = {}
+local TabButtons = {}
+
+local function CreateTab(name, order)
+    local Btn = Instance.new("TextButton")
+    Btn.Size = UDim2.fromOffset(92, 44)
+    Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+    Btn.Text = name
+    Btn.TextColor3 = Color3.fromRGB(180, 180, 190)
+    Btn.Font = Enum.Font.GothamBold
+    Btn.TextSize = 13
+    Btn.BorderSizePixel = 0
+    Btn.AutoButtonColor = false
+    Btn.LayoutOrder = order
+    Btn.ZIndex = 12
+    Btn.Parent = TabBar
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 10)
+    TabButtons[name] = Btn
+
+    local Page = Instance.new("ScrollingFrame")
+    Page.Size = UDim2.new(1, -16, 1, -120)
+    Page.Position = UDim2.new(0, 8, 0, 116)
+    Page.BackgroundTransparency = 1
+    Page.BorderSizePixel = 0
+    Page.ScrollBarThickness = 3
+    Page.ScrollBarImageColor3 = C.ColNeon
+    Page.CanvasSize = UDim2.new(0, 0, 0, 0)
+    Page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    Page.Visible = false
+    Page.ZIndex = 11
+    Page.Parent = Main
+    local PLayout = Instance.new("UIListLayout", Page)
+    PLayout.Padding = UDim.new(0, 10)
+    PLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    Pages[name] = Page
+
+    Btn.MouseButton1Click:Connect(function()
+        for _, pg in pairs(Pages) do pg.Visible = false end
+        for _, b in pairs(TabButtons) do
+            b.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+            b.TextColor3 = Color3.fromRGB(180, 180, 190)
+        end
+        Page.Visible = true
+        Btn.BackgroundColor3 = C.ColNeon
+        Btn.TextColor3 = Color3.fromRGB(0, 0, 0)
+    end)
+    return Page
+end
+
+-- Мобильные компоненты (крупный тач)
+local function CreateToggle(parent, text, def, cb)
+    local Btn = Instance.new("TextButton")
+    Btn.Size = UDim2.new(1, 0, 0, 50)
+    Btn.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    Btn.Text = ""
+    Btn.AutoButtonColor = false
+    Btn.BorderSizePixel = 0
+    Btn.ZIndex = 12
+    Btn.Parent = parent
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 10)
+
+    local Lbl = Instance.new("TextLabel")
+    Lbl.Size = UDim2.new(1, -80, 1, 0)
+    Lbl.Position = UDim2.new(0, 14, 0, 0)
+    Lbl.BackgroundTransparency = 1
+    Lbl.Text = text
+    Lbl.TextColor3 = Color3.fromRGB(230, 230, 240)
+    Lbl.Font = Enum.Font.GothamMedium
+    Lbl.TextSize = 15
+    Lbl.TextXAlignment = Enum.TextXAlignment.Left
+    Lbl.ZIndex = 13
+    Lbl.Parent = Btn
+
+    local Track = Instance.new("Frame")
+    Track.Size = UDim2.fromOffset(48, 26)
+    Track.Position = UDim2.new(1, -62, 0.5, -13)
+    Track.BackgroundColor3 = def and C.ColNeon or Color3.fromRGB(55, 55, 70)
+    Track.BorderSizePixel = 0
+    Track.ZIndex = 13
+    Track.Parent = Btn
+    Instance.new("UICorner", Track).CornerRadius = UDim.new(1, 0)
+
+    local Knob = Instance.new("Frame")
+    Knob.Size = UDim2.fromOffset(20, 20)
+    Knob.Position = def and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 3, 0.5, -10)
+    Knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    Knob.BorderSizePixel = 0
+    Knob.ZIndex = 14
+    Knob.Parent = Track
+    Instance.new("UICorner", Knob).CornerRadius = UDim.new(1, 0)
+
+    local state = def
+    Btn.MouseButton1Click:Connect(function()
+        state = not state
+        Tween:Create(Track, TweenInfo.new(0.15), {
+            BackgroundColor3 = state and C.ColNeon or Color3.fromRGB(55, 55, 70)
+        }):Play()
+        Tween:Create(Knob, TweenInfo.new(0.15), {
+            Position = state and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 3, 0.5, -10)
+        }):Play()
+        if cb then cb(state) end
+    end)
+end
+
+local function CreateSlider(parent, text, mn, mx, def, cb)
+    local F = Instance.new("Frame")
+    F.Size = UDim2.new(1, 0, 0, 62)
+    F.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+    F.BorderSizePixel = 0
+    F.ZIndex = 12
+    F.Parent = parent
+    Instance.new("UICorner", F).CornerRadius = UDim.new(0, 10)
+
+    local Lbl = Instance.new("TextLabel")
+    Lbl.Size = UDim2.new(1, -20, 0, 22)
+    Lbl.Position = UDim2.new(0, 14, 0, 6)
+    Lbl.BackgroundTransparency = 1
+    Lbl.Text = text .. ": " .. def
+    Lbl.TextColor3 = Color3.fromRGB(230, 230, 240)
+    Lbl.Font = Enum.Font.GothamMedium
+    Lbl.TextSize = 14
+    Lbl.TextXAlignment = Enum.TextXAlignment.Left
+    Lbl.ZIndex = 13
+    Lbl.Parent = F
+
+    local BarBg = Instance.new("Frame")
+    BarBg.Size = UDim2.new(1, -28, 0, 8)
+    BarBg.Position = UDim2.new(0, 14, 0, 40)
+    BarBg.BackgroundColor3 = Color3.fromRGB(45, 45, 58)
+    BarBg.BorderSizePixel = 0
+    BarBg.ZIndex = 13
+    BarBg.Parent = F
+    Instance.new("UICorner", BarBg).CornerRadius = UDim.new(1, 0)
+
+    local Fill = Instance.new("Frame")
+    Fill.Size = UDim2.new((def - mn) / (mx - mn), 0, 1, 0)
+    Fill.BackgroundColor3 = C.ColNeon
+    Fill.BorderSizePixel = 0
+    Fill.ZIndex = 13
+    Fill.Parent = BarBg
+    Instance.new("UICorner", Fill).CornerRadius = UDim.new(1, 0)
+
+    local Hit = Instance.new("TextButton")
+    Hit.Size = UDim2.new(1, 0, 3, 0)
+    Hit.Position = UDim2.new(0, 0, -1, 0)
+    Hit.BackgroundTransparency = 1
+    Hit.Text = ""
+    Hit.ZIndex = 14
+    Hit.Parent = BarBg
+
+    local dragging = false
+    local function Update(pos)
+        local rel = math.clamp((pos - BarBg.AbsolutePosition.X) / BarBg.AbsoluteSize.X, 0, 1)
+        local v = math.floor(mn + (mx - mn) * rel + 0.5)
+        Fill.Size = UDim2.new(rel, 0, 1, 0)
+        Lbl.Text = text .. ": " .. v
+        if cb then cb(v) end
+    end
+
+    Hit.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            Update(i.Position.X)
+        end
+    end)
+    TrackConn(UIS.InputChanged:Connect(function(i)
+        if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+            Update(i.Position.X)
+        end
+    end))
+    TrackConn(UIS.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end))
+end
+
+local function CreateButton(parent, text, cb)
+    local Btn = Instance.new("TextButton")
+    Btn.Size = UDim2.new(1, 0, 0, 50)
+    Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+    Btn.Text = text
+    Btn.TextColor3 = C.ColNeon
+    Btn.Font = Enum.Font.GothamBold
+    Btn.TextSize = 15
+    Btn.BorderSizePixel = 0
+    Btn.AutoButtonColor = false
+    Btn.ZIndex = 12
+    Btn.Parent = parent
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 10)
+    Btn.MouseButton1Click:Connect(function()
+        Btn.BackgroundColor3 = Color3.fromRGB(0, 200, 120)
+        task.wait(0.15)
+        Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+        if cb then cb() end
+    end)
+end
+
+local function CreateCycle(parent, text, options, def, cb)
+    local Btn = Instance.new("TextButton")
+    Btn.Size = UDim2.new(1, 0, 0, 50)
+    Btn.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+    Btn.Text = text .. ": " .. def
+    Btn.TextColor3 = C.ColNeon
+    Btn.Font = Enum.Font.GothamBold
+    Btn.TextSize = 14
+    Btn.BorderSizePixel = 0
+    Btn.AutoButtonColor = false
+    Btn.ZIndex = 12
+    Btn.Parent = parent
+    Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 10)
+    local idx = 1
+    for i, o in ipairs(options) do if o == def then idx = i break end end
+    Btn.MouseButton1Click:Connect(function()
+        idx = idx + 1
+        if idx > #options then idx = 1 end
+        Btn.Text = text .. ": " .. options[idx]
+        if cb then cb(options[idx]) end
+    end)
+end
+
+-- Кнопки открытия/закрытия
+OpenBtn.MouseButton1Click:Connect(function()
+    Main.Visible = true
+    Bg.Visible = true
+    OpenBtn.Visible = false
+end)
+CloseBtn.MouseButton1Click:Connect(function()
+    Main.Visible = false
+    Bg.Visible = false
+    OpenBtn.Visible = true
+end)
+
+-- ═══════════════ TABS ═══════════════
+local Combat = CreateTab("Combat", 1)
+local Visual = CreateTab("Visuals", 2)
+local Vehicles = CreateTab("Vehicles", 3)
+local TP = CreateTab("Teleport", 4)
 
 -- Combat
-Combat:CreateToggle({ Name = "Silent Aim", CurrentValue = C.Silent, Flag = "silent", Callback = function(v) C.Silent = v end })
-Combat:CreateSlider({ Name = "FOV %", Range = {5, 100}, Increment = 1, Suffix = "%", CurrentValue = C.FOVPercent, Flag = "fov", Callback = function(v) C.FOVPercent = v end })
-Combat:CreateSlider({ Name = "Max Distance", Range = {500, 5000}, Increment = 100, Suffix = "m", CurrentValue = C.MaxDist, Flag = "maxdist", Callback = function(v) C.MaxDist = v end })
-Combat:CreateSlider({ Name = "Prediction X (x10)", Range = {5, 30}, Increment = 1, CurrentValue = math.floor(C.Prediction * 10), Flag = "predx", Callback = function(v) C.Prediction = v / 10 end })
-Combat:CreateSlider({ Name = "Prediction Y (x10)", Range = {5, 30}, Increment = 1, CurrentValue = math.floor(C.PredictionY * 10), Flag = "predy", Callback = function(v) C.PredictionY = v / 10 end })
-Combat:CreateDropdown({ Name = "Priority", Options = {"distance", "health", "fov"}, CurrentOption = {C.PriorityMode}, Flag = "prio", Callback = function(o) C.PriorityMode = o[1] end })
-Combat:CreateToggle({ Name = "Headshot", CurrentValue = C.Headshot, Flag = "headshot", Callback = function(v) C.Headshot = v end })
-Combat:CreateToggle({ Name = "Wall Check", CurrentValue = C.WallCheck, Flag = "wall", Callback = function(v) C.WallCheck = v end })
-Combat:CreateToggle({ Name = "Bypass", CurrentValue = C.Bypass, Flag = "bypass", Callback = function(v) C.Bypass = v end })
-Combat:CreateSlider({ Name = "Bypass Spread", Range = {0, 30}, Increment = 1, CurrentValue = math.floor(C.BypassSpread * 100), Flag = "bspread", Callback = function(v) C.BypassSpread = v / 100 end })
-Combat:CreateDropdown({ Name = "Team Filter", Options = {"all", "enemy", "my"}, CurrentOption = {C.TeamFilter}, Flag = "team", Callback = function(o) C.TeamFilter = o[1] end })
-Combat:CreateToggle({ Name = "Hitbox Expander", CurrentValue = C.HitboxExp, Flag = "hitbox", Callback = function(v) C.HitboxExp = v; ApplyHitbox() end })
-Combat:CreateSlider({ Name = "Hitbox Size", Range = {2, 20}, Increment = 1, CurrentValue = C.HitboxSize, Flag = "hbsize", Callback = function(v) C.HitboxSize = v; ApplyHitbox() end })
-Combat:CreateColorPicker({ Name = "Aim Color", Color = C.ColAim, Flag = "aimcol", Callback = function(c) C.ColAim = c; SilentLine.Color = c; FOVCircle.Color = c end })
+CreateToggle(Combat, "Silent Aim", C.Silent, function(v) C.Silent = v end)
+CreateSlider(Combat, "FOV %", 5, 100, C.FOVPercent, function(v) C.FOVPercent = v end)
+CreateSlider(Combat, "Max Distance", 500, 5000, C.MaxDist, function(v) C.MaxDist = v end)
+CreateSlider(Combat, "Prediction X (x10)", 5, 30, math.floor(C.Prediction * 10), function(v) C.Prediction = v / 10 end)
+CreateSlider(Combat, "Prediction Y (x10)", 5, 30, math.floor(C.PredictionY * 10), function(v) C.PredictionY = v / 10 end)
+CreateCycle(Combat, "Priority", {"distance", "health", "fov"}, C.PriorityMode, function(o) C.PriorityMode = o end)
+CreateToggle(Combat, "Headshot", C.Headshot, function(v) C.Headshot = v end)
+CreateToggle(Combat, "Wall Check", C.WallCheck, function(v) C.WallCheck = v end)
+CreateToggle(Combat, "Bypass", C.Bypass, function(v) C.Bypass = v end)
+CreateSlider(Combat, "Bypass Spread", 0, 30, math.floor(C.BypassSpread * 100), function(v) C.BypassSpread = v / 100 end)
+CreateCycle(Combat, "Team Filter", {"all", "enemy", "my"}, C.TeamFilter, function(o) C.TeamFilter = o end)
+CreateToggle(Combat, "Hitbox Expander", C.HitboxExp, function(v) C.HitboxExp = v; ApplyHitbox() end)
+CreateSlider(Combat, "Hitbox Size", 2, 20, C.HitboxSize, function(v) C.HitboxSize = v; ApplyHitbox() end)
 
 -- Visuals
-Visual:CreateToggle({ Name = "ESP", CurrentValue = C.ESP, Flag = "esp", Callback = function(v) C.ESP = v end })
-Visual:CreateToggle({ Name = "Box", CurrentValue = C.ESP_Box, Flag = "espbox", Callback = function(v) C.ESP_Box = v end })
-Visual:CreateToggle({ Name = "Name", CurrentValue = C.ESP_Name, Flag = "espname", Callback = function(v) C.ESP_Name = v end })
-Visual:CreateToggle({ Name = "Distance", CurrentValue = C.ESP_Dist, Flag = "espdist", Callback = function(v) C.ESP_Dist = v end })
-Visual:CreateToggle({ Name = "HP Bar", CurrentValue = C.ESP_HP, Flag = "esphp", Callback = function(v) C.ESP_HP = v end })
-Visual:CreateToggle({ Name = "HP Text", CurrentValue = C.ESP_HPText, Flag = "esphpt", Callback = function(v) C.ESP_HPText = v end })
-Visual:CreateToggle({ Name = "Skeleton", CurrentValue = C.ESP_Skel, Flag = "espskel", Callback = function(v) C.ESP_Skel = v end })
-Visual:CreateToggle({ Name = "Line", CurrentValue = C.ESP_Line, Flag = "espline", Callback = function(v) C.ESP_Line = v end })
-Visual:CreateToggle({ Name = "Offscreen Arrows", CurrentValue = C.ESP_Offscr, Flag = "espoff", Callback = function(v) C.ESP_Offscr = v end })
-Visual:CreateToggle({ Name = "Distance Bar", CurrentValue = C.ESP_DistBar, Flag = "espdb", Callback = function(v) C.ESP_DistBar = v end })
-Visual:CreateSlider({ Name = "ESP Max Distance", Range = {500, 5000}, Increment = 100, Suffix = "m", CurrentValue = C.ESP_MaxDist, Flag = "espmax", Callback = function(v) C.ESP_MaxDist = v end })
-Visual:CreateToggle({ Name = "Crosshair", CurrentValue = C.Crosshair, Flag = "ch", Callback = function(v) C.Crosshair = v end })
-Visual:CreateSlider({ Name = "Crosshair Size", Range = {5, 30}, Increment = 1, CurrentValue = C.CH_Size, Flag = "chsize", Callback = function(v) C.CH_Size = v end })
-Visual:CreateColorPicker({ Name = "Ally Color", Color = C.ColAlly, Flag = "colally", Callback = function(c) C.ColAlly = c end })
-Visual:CreateColorPicker({ Name = "Enemy Color", Color = C.ColEnemy, Flag = "colenemy", Callback = function(c) C.ColEnemy = c end })
-Visual:CreateColorPicker({ Name = "Crosshair Color", Color = C.ColNeon, Flag = "colch", Callback = function(c) C.ColNeon = c; CH1.Color = c; CH2.Color = c end })
+CreateToggle(Visual, "ESP", C.ESP, function(v) C.ESP = v end)
+CreateToggle(Visual, "Box", C.ESP_Box, function(v) C.ESP_Box = v end)
+CreateToggle(Visual, "Name", C.ESP_Name, function(v) C.ESP_Name = v end)
+CreateToggle(Visual, "Distance", C.ESP_Dist, function(v) C.ESP_Dist = v end)
+CreateToggle(Visual, "HP Bar", C.ESP_HP, function(v) C.ESP_HP = v end)
+CreateToggle(Visual, "HP Text", C.ESP_HPText, function(v) C.ESP_HPText = v end)
+CreateToggle(Visual, "Skeleton", C.ESP_Skel, function(v) C.ESP_Skel = v end)
+CreateToggle(Visual, "Line", C.ESP_Line, function(v) C.ESP_Line = v end)
+CreateToggle(Visual, "Offscreen Arrows", C.ESP_Offscr, function(v) C.ESP_Offscr = v end)
+CreateToggle(Visual, "Distance Bar", C.ESP_DistBar, function(v) C.ESP_DistBar = v end)
+CreateSlider(Visual, "ESP Max Distance", 500, 5000, C.ESP_MaxDist, function(v) C.ESP_MaxDist = v end)
+CreateToggle(Visual, "Crosshair", C.Crosshair, function(v) C.Crosshair = v end)
+CreateSlider(Visual, "Crosshair Size", 5, 30, C.CH_Size, function(v) C.CH_Size = v end)
 
 -- Vehicles
-Vehicles:CreateToggle({ Name = "Vehicle ESP", CurrentValue = C.V_ESP, Flag = "vesp", Callback = function(v) C.V_ESP = v end })
-Vehicles:CreateToggle({ Name = "Box", CurrentValue = C.V_ESP_Box, Flag = "vespbox", Callback = function(v) C.V_ESP_Box = v end })
-Vehicles:CreateToggle({ Name = "Name", CurrentValue = C.V_ESP_Name, Flag = "vespname", Callback = function(v) C.V_ESP_Name = v end })
-Vehicles:CreateToggle({ Name = "Distance", CurrentValue = C.V_ESP_Dist, Flag = "vespdist", Callback = function(v) C.V_ESP_Dist = v end })
-Vehicles:CreateSlider({ Name = "Max Distance", Range = {100, 10000}, Increment = 100, Suffix = "m", CurrentValue = C.V_ESP_MaxDist, Flag = "vespmax", Callback = function(v) C.V_ESP_MaxDist = v end })
-Vehicles:CreateColorPicker({ Name = "Color", Color = C.ColVehicle, Flag = "colveh", Callback = function(c) C.ColVehicle = c end })
+CreateToggle(Vehicles, "Vehicle ESP", C.V_ESP, function(v) C.V_ESP = v end)
+CreateToggle(Vehicles, "Box", C.V_ESP_Box, function(v) C.V_ESP_Box = v end)
+CreateToggle(Vehicles, "Name", C.V_ESP_Name, function(v) C.V_ESP_Name = v end)
+CreateToggle(Vehicles, "Distance", C.V_ESP_Dist, function(v) C.V_ESP_Dist = v end)
+CreateSlider(Vehicles, "Max Distance", 100, 10000, C.V_ESP_MaxDist, function(v) C.V_ESP_MaxDist = v end)
 
 -- Teleport
-TP:CreateToggle({ Name = "Drop to ground", CurrentValue = C.TP_DropToGround, Flag = "tpdrop", Callback = function(v) C.TP_DropToGround = v end })
-TP:CreateSlider({ Name = "Safe drop", Range = {1, 20}, Increment = 1, CurrentValue = C.TP_SafeDrop, Flag = "tpsafe", Callback = function(v) C.TP_SafeDrop = v end })
-TP:CreateButton({ Name = "TP Base", Callback = TPBase })
-TP:CreateButton({ Name = "TP Airdrop", Callback = TPAirdrop })
-TP:CreateButton({ Name = "TP Crashed UAV", Callback = TPCrashedUAV })
-TP:CreateButton({ Name = "TP Capture", Callback = TPCapture })
-TP:CreateButton({ Name = "TP Nearest Enemy", Callback = TPNearestEnemy })
+CreateToggle(TP, "Drop to ground", C.TP_DropToGround, function(v) C.TP_DropToGround = v end)
+CreateSlider(TP, "Safe drop", 1, 20, C.TP_SafeDrop, function(v) C.TP_SafeDrop = v end)
+CreateButton(TP, "TP Base", TPBase)
+CreateButton(TP, "TP Airdrop", TPAirdrop)
+CreateButton(TP, "TP Crashed UAV", TPCrashedUAV)
+CreateButton(TP, "TP Capture", TPCapture)
+CreateButton(TP, "TP Nearest Enemy", TPNearestEnemy)
+
+-- Первый таб активен
+Pages["Combat"].Visible = true
+TabButtons["Combat"].BackgroundColor3 = C.ColNeon
+TabButtons["Combat"].TextColor3 = Color3.fromRGB(0, 0, 0)
 
 -- ═══════════════ RENDER LOOP ═══════════════
 local espAccum, ESP_INTERVAL = 0, 1 / 30
@@ -849,7 +1171,7 @@ getgenv().MeowModUnload = function()
         end
     end
     silentTarget = nil; silentActive = false
-    pcall(function() Library:Destroy() end)
+    pcall(function() ScreenGui:Destroy() end)
     pcall(function()
         getgenv().MeowModUnload = nil
         getgenv().MeowModUnloaded = nil
