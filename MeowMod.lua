@@ -1,14 +1,15 @@
--- // MEOWMOD | V3.1 // ORION UI + V3 CORE
--- Весь функционал v3 (silent aim, ESP, TP, vehicle, hitbox) пересажен на Orion UI.
--- Orion: темы, конфиги, анимации, всё как Rayfield но аккуратнее.
+-- // MEOWMOD | V3.2 // WINDUI + V3 CORE (полный)
+-- Интерфейс: WindUI (не Rayfield, не Orion).
+-- Весь функционал v3: silent aim (WS.Raycast), ESP, vehicle ESP, TP, hitbox, crosshair.
+-- Камера не залипает. Ничего не пропущено.
 
 if getgenv().MeowModUnload then pcall(getgenv().MeowModUnload); task.wait(0.05) end
+getgenv().MeowModUnloaded = false
 
 local Players    = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS        = game:GetService("UserInputService")
 local WS         = game:GetService("Workspace")
-local CollSvc    = game:GetService("CollectionService")
 
 local LP     = Players.LocalPlayer
 local Camera = WS.CurrentCamera
@@ -17,8 +18,19 @@ local Connections, Drawings = {}, {}
 local function TrackConn(c) table.insert(Connections, c); return c end
 local function TrackDraw(d) table.insert(Drawings, d); return d end
 
--- ═══════════════ ORION BOOT ═══════════════
-local OrionLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/Qanuir/orion-ui/refs/heads/main/source.lua"))()
+-- ═══════════════ WINDUI BOOT ═══════════════
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+
+local Window = WindUI:CreateWindow({
+    Title = "MeowMod V3.2",
+    Icon = "rbxassetid://4483345998",
+    Author = "ollie",
+    Folder = "MeowMod",
+    Size = UDim2.fromOffset(600, 500),
+    Theme = "Dark",
+    Transparent = true,
+    Resizable = true,
+})
 
 -- ═══════════════ CONFIG ═══════════════
 local C = {
@@ -190,7 +202,7 @@ local function PickTarget()
     return best
 end
 
--- ─── namecall hook: ТОЛЬКО Workspace:Raycast / FindPartOnRay ───
+-- ─── хук: ТОЛЬКО Workspace:Raycast / FindPartOnRay ───
 local hookMT, oldNamecall, hookInstalled = nil, nil, false
 local _internal = false
 
@@ -740,72 +752,62 @@ local function TPNearestEnemy()
     return false
 end
 
--- ═══════════════ ORION UI ═══════════════
-local Window = OrionLib:MakeWindow({
-    Name = "MeowMod V3.1",
-    HidePremium = false,
-    SaveConfig = true,
-    ConfigFolder = "MeowMod",
-    IntroEnabled = false,
-})
-
-local Combat = Window:MakeTab({ Name = "Combat", Icon = "rbxassetid://4483345998" })
-local Visual = Window:MakeTab({ Name = "Visuals", Icon = "rbxassetid://4483345998" })
-local Vehicles = Window:MakeTab({ Name = "Vehicles", Icon = "rbxassetid://4483345998" })
-local TP = Window:MakeTab({ Name = "Teleport", Icon = "rbxassetid://4483345998" })
+-- ═══════════════ WINDUI TABS ═══════════════
+local Combat = Window:Tab({ Title = "Combat", Icon = "crosshair" })
+local Visual = Window:Tab({ Title = "Visuals", Icon = "eye" })
+local Vehicles = Window:Tab({ Title = "Vehicles", Icon = "car" })
+local TP = Window:Tab({ Title = "Teleport", Icon = "map-pin" })
 
 -- Combat
-Combat:AddToggle({ Name = "Silent Aim", Default = C.Silent, Flag = "silent", Callback = function(v) C.Silent = v end })
-Combat:AddSlider({ Name = "FOV %", Min = 5, Max = 100, Default = C.FOVPercent, Color = C.ColNeon, ValueName = "%", Flag = "fov", Callback = function(v) C.FOVPercent = v end })
-Combat:AddSlider({ Name = "Max Distance", Min = 500, Max = 5000, Default = C.MaxDist, Color = C.ColNeon, ValueName = "m", Flag = "maxdist", Callback = function(v) C.MaxDist = v end })
-Combat:AddSlider({ Name = "Prediction X (x10)", Min = 5, Max = 30, Default = math.floor(C.Prediction * 10), Color = C.ColNeon, Flag = "predx", Callback = function(v) C.Prediction = v / 10 end })
-Combat:AddSlider({ Name = "Prediction Y (x10)", Min = 5, Max = 30, Default = math.floor(C.PredictionY * 10), Color = C.ColNeon, Flag = "predy", Callback = function(v) C.PredictionY = v / 10 end })
-Combat:AddDropdown({ Name = "Priority", Options = {"distance", "health", "fov"}, Default = C.PriorityMode, Flag = "prio", Callback = function(o) C.PriorityMode = o end })
-Combat:AddToggle({ Name = "Headshot", Default = C.Headshot, Flag = "headshot", Callback = function(v) C.Headshot = v end })
-Combat:AddToggle({ Name = "Wall Check", Default = C.WallCheck, Flag = "wall", Callback = function(v) C.WallCheck = v end })
-Combat:AddToggle({ Name = "Bypass", Default = C.Bypass, Flag = "bypass", Callback = function(v) C.Bypass = v end })
-Combat:AddSlider({ Name = "Bypass Spread", Min = 0, Max = 30, Default = math.floor(C.BypassSpread * 100), Color = C.ColNeon, ValueName = "cm", Flag = "bspread", Callback = function(v) C.BypassSpread = v / 100 end })
-Combat:AddDropdown({ Name = "Team Filter", Options = {"all", "enemy", "my"}, Default = C.TeamFilter, Flag = "team", Callback = function(o) C.TeamFilter = o end })
-Combat:AddToggle({ Name = "Hitbox Expander", Default = C.HitboxExp, Flag = "hitbox", Callback = function(v) C.HitboxExp = v; ApplyHitbox() end })
-Combat:AddSlider({ Name = "Hitbox Size", Min = 2, Max = 20, Default = C.HitboxSize, Color = C.ColNeon, Flag = "hbsize", Callback = function(v) C.HitboxSize = v; ApplyHitbox() end })
-Combat:AddColorpicker({ Name = "Aim Color", Default = C.ColAim, Flag = "aimcol", Callback = function(c) C.ColAim = c; SilentLine.Color = c; FOVCircle.Color = c end })
+Combat:Toggle({ Title = "Silent Aim", Default = C.Silent, Callback = function(v) C.Silent = v end })
+Combat:Slider({ Title = "FOV %", Min = 5, Max = 100, Default = C.FOVPercent, Callback = function(v) C.FOVPercent = v end })
+Combat:Slider({ Title = "Max Distance", Min = 500, Max = 5000, Default = C.MaxDist, Callback = function(v) C.MaxDist = v end })
+Combat:Slider({ Title = "Prediction X (x10)", Min = 5, Max = 30, Default = math.floor(C.Prediction * 10), Callback = function(v) C.Prediction = v / 10 end })
+Combat:Slider({ Title = "Prediction Y (x10)", Min = 5, Max = 30, Default = math.floor(C.PredictionY * 10), Callback = function(v) C.PredictionY = v / 10 end })
+Combat:Dropdown({ Title = "Priority", Values = {"distance", "health", "fov"}, Default = C.PriorityMode, Callback = function(o) C.PriorityMode = o end })
+Combat:Toggle({ Title = "Headshot", Default = C.Headshot, Callback = function(v) C.Headshot = v end })
+Combat:Toggle({ Title = "Wall Check", Default = C.WallCheck, Callback = function(v) C.WallCheck = v end })
+Combat:Toggle({ Title = "Bypass", Default = C.Bypass, Callback = function(v) C.Bypass = v end })
+Combat:Slider({ Title = "Bypass Spread", Min = 0, Max = 30, Default = math.floor(C.BypassSpread * 100), Callback = function(v) C.BypassSpread = v / 100 end })
+Combat:Dropdown({ Title = "Team Filter", Values = {"all", "enemy", "my"}, Default = C.TeamFilter, Callback = function(o) C.TeamFilter = o end })
+Combat:Toggle({ Title = "Hitbox Expander", Default = C.HitboxExp, Callback = function(v) C.HitboxExp = v; ApplyHitbox() end })
+Combat:Slider({ Title = "Hitbox Size", Min = 2, Max = 20, Default = C.HitboxSize, Callback = function(v) C.HitboxSize = v; ApplyHitbox() end })
+Combat:Colorpicker({ Title = "Aim Color", Default = C.ColAim, Callback = function(c) C.ColAim = c; SilentLine.Color = c; FOVCircle.Color = c end })
 
 -- Visuals
-Visual:AddToggle({ Name = "ESP", Default = C.ESP, Flag = "esp", Callback = function(v) C.ESP = v end })
-Visual:AddToggle({ Name = "Box", Default = C.ESP_Box, Flag = "espbox", Callback = function(v) C.ESP_Box = v end })
-Visual:AddToggle({ Name = "Name", Default = C.ESP_Name, Flag = "espname", Callback = function(v) C.ESP_Name = v end })
-Visual:AddToggle({ Name = "Distance", Default = C.ESP_Dist, Flag = "espdist", Callback = function(v) C.ESP_Dist = v end })
-Visual:AddToggle({ Name = "HP Bar", Default = C.ESP_HP, Flag = "esphp", Callback = function(v) C.ESP_HP = v end })
-Visual:AddToggle({ Name = "HP Text", Default = C.ESP_HPText, Flag = "esphpt", Callback = function(v) C.ESP_HPText = v end })
-Visual:AddToggle({ Name = "Skeleton", Default = C.ESP_Skel, Flag = "espskel", Callback = function(v) C.ESP_Skel = v end })
-Visual:AddToggle({ Name = "Line", Default = C.ESP_Line, Flag = "espline", Callback = function(v) C.ESP_Line = v end })
-Visual:AddToggle({ Name = "Offscreen Arrows", Default = C.ESP_Offscr, Flag = "espoff", Callback = function(v) C.ESP_Offscr = v end })
-Visual:AddToggle({ Name = "Distance Bar", Default = C.ESP_DistBar, Flag = "espdb", Callback = function(v) C.ESP_DistBar = v end })
-Visual:AddSlider({ Name = "ESP Max Distance", Min = 500, Max = 5000, Default = C.ESP_MaxDist, Color = C.ColNeon, ValueName = "m", Flag = "espmax", Callback = function(v) C.ESP_MaxDist = v end })
-Visual:AddToggle({ Name = "Crosshair", Default = C.Crosshair, Flag = "ch", Callback = function(v) C.Crosshair = v end })
-Visual:AddSlider({ Name = "Crosshair Size", Min = 5, Max = 30, Default = C.CH_Size, Color = C.ColNeon, Flag = "chsize", Callback = function(v) C.CH_Size = v end })
-Visual:AddColorpicker({ Name = "Ally Color", Default = C.ColAlly, Flag = "colally", Callback = function(c) C.ColAlly = c end })
-Visual:AddColorpicker({ Name = "Enemy Color", Default = C.ColEnemy, Flag = "colenemy", Callback = function(c) C.ColEnemy = c end })
-Visual:AddColorpicker({ Name = "Crosshair Color", Default = C.ColNeon, Flag = "colch", Callback = function(c) C.ColNeon = c; CH1.Color = c; CH2.Color = c end })
+Visual:Toggle({ Title = "ESP", Default = C.ESP, Callback = function(v) C.ESP = v end })
+Visual:Toggle({ Title = "Box", Default = C.ESP_Box, Callback = function(v) C.ESP_Box = v end })
+Visual:Toggle({ Title = "Name", Default = C.ESP_Name, Callback = function(v) C.ESP_Name = v end })
+Visual:Toggle({ Title = "Distance", Default = C.ESP_Dist, Callback = function(v) C.ESP_Dist = v end })
+Visual:Toggle({ Title = "HP Bar", Default = C.ESP_HP, Callback = function(v) C.ESP_HP = v end })
+Visual:Toggle({ Title = "HP Text", Default = C.ESP_HPText, Callback = function(v) C.ESP_HPText = v end })
+Visual:Toggle({ Title = "Skeleton", Default = C.ESP_Skel, Callback = function(v) C.ESP_Skel = v end })
+Visual:Toggle({ Title = "Line", Default = C.ESP_Line, Callback = function(v) C.ESP_Line = v end })
+Visual:Toggle({ Title = "Offscreen Arrows", Default = C.ESP_Offscr, Callback = function(v) C.ESP_Offscr = v end })
+Visual:Toggle({ Title = "Distance Bar", Default = C.ESP_DistBar, Callback = function(v) C.ESP_DistBar = v end })
+Visual:Slider({ Title = "ESP Max Distance", Min = 500, Max = 5000, Default = C.ESP_MaxDist, Callback = function(v) C.ESP_MaxDist = v end })
+Visual:Toggle({ Title = "Crosshair", Default = C.Crosshair, Callback = function(v) C.Crosshair = v end })
+Visual:Slider({ Title = "Crosshair Size", Min = 5, Max = 30, Default = C.CH_Size, Callback = function(v) C.CH_Size = v end })
+Visual:Colorpicker({ Title = "Ally Color", Default = C.ColAlly, Callback = function(c) C.ColAlly = c end })
+Visual:Colorpicker({ Title = "Enemy Color", Default = C.ColEnemy, Callback = function(c) C.ColEnemy = c end })
+Visual:Colorpicker({ Title = "Crosshair Color", Default = C.ColNeon, Callback = function(c) C.ColNeon = c; CH1.Color = c; CH2.Color = c end })
 
 -- Vehicles
-Vehicles:AddToggle({ Name = "Vehicle ESP", Default = C.V_ESP, Flag = "vesp", Callback = function(v) C.V_ESP = v end })
-Vehicles:AddToggle({ Name = "Box", Default = C.V_ESP_Box, Flag = "vespbox", Callback = function(v) C.V_ESP_Box = v end })
-Vehicles:AddToggle({ Name = "Name", Default = C.V_ESP_Name, Flag = "vespname", Callback = function(v) C.V_ESP_Name = v end })
-Vehicles:AddToggle({ Name = "Distance", Default = C.V_ESP_Dist, Flag = "vespdist", Callback = function(v) C.V_ESP_Dist = v end })
-Vehicles:AddSlider({ Name = "Max Distance", Min = 100, Max = 10000, Default = C.V_ESP_MaxDist, Color = C.ColNeon, ValueName = "m", Flag = "vespmax", Callback = function(v) C.V_ESP_MaxDist = v end })
-Vehicles:AddColorpicker({ Name = "Color", Default = C.ColVehicle, Flag = "colveh", Callback = function(c) C.ColVehicle = c end })
+Vehicles:Toggle({ Title = "Vehicle ESP", Default = C.V_ESP, Callback = function(v) C.V_ESP = v end })
+Vehicles:Toggle({ Title = "Box", Default = C.V_ESP_Box, Callback = function(v) C.V_ESP_Box = v end })
+Vehicles:Toggle({ Title = "Name", Default = C.V_ESP_Name, Callback = function(v) C.V_ESP_Name = v end })
+Vehicles:Toggle({ Title = "Distance", Default = C.V_ESP_Dist, Callback = function(v) C.V_ESP_Dist = v end })
+Vehicles:Slider({ Title = "Max Distance", Min = 100, Max = 10000, Default = C.V_ESP_MaxDist, Callback = function(v) C.V_ESP_MaxDist = v end })
+Vehicles:Colorpicker({ Title = "Color", Default = C.ColVehicle, Callback = function(c) C.ColVehicle = c end })
 
 -- Teleport
-TP:AddToggle({ Name = "Drop to ground", Default = C.TP_DropToGround, Flag = "tpdrop", Callback = function(v) C.TP_DropToGround = v end })
-TP:AddSlider({ Name = "Safe drop", Min = 1, Max = 20, Default = C.TP_SafeDrop, Color = C.ColNeon, Flag = "tpsafe", Callback = function(v) C.TP_SafeDrop = v end })
-TP:AddButton({ Name = "TP Base", Callback = TPBase })
-TP:AddButton({ Name = "TP Airdrop", Callback = TPAirdrop })
-TP:AddButton({ Name = "TP Crashed UAV", Callback = TPCrashedUAV })
-TP:AddButton({ Name = "TP Capture", Callback = TPCapture })
-TP:AddButton({ Name = "TP Nearest Enemy", Callback = TPNearestEnemy })
-
-OrionLib:Init()
+TP:Toggle({ Title = "Drop to ground", Default = C.TP_DropToGround, Callback = function(v) C.TP_DropToGround = v end })
+TP:Slider({ Title = "Safe drop", Min = 1, Max = 20, Default = C.TP_SafeDrop, Callback = function(v) C.TP_SafeDrop = v end })
+TP:Button({ Title = "TP Base", Callback = TPBase })
+TP:Button({ Title = "TP Airdrop", Callback = TPAirdrop })
+TP:Button({ Title = "TP Crashed UAV", Callback = TPCrashedUAV })
+TP:Button({ Title = "TP Capture", Callback = TPCapture })
+TP:Button({ Title = "TP Nearest Enemy", Callback = TPNearestEnemy })
 
 -- ═══════════════ RENDER LOOP ═══════════════
 local espAccum, ESP_INTERVAL = 0, 1 / 30
@@ -845,16 +847,15 @@ getgenv().MeowModUnload = function()
         end
     end
     silentTarget = nil; silentActive = false
-    pcall(function() OrionLib:Destroy() end)
+    pcall(function() WindUI:Destroy() end)
     pcall(function()
         getgenv().MeowModUnload = nil
         getgenv().MeowModUnloaded = nil
     end)
 end
 
-OrionLib:MakeNotification({
-    Name = "MeowMod V3.1",
-    Content = "Orion UI loaded. Silent aim as v3.",
-    Image = "rbxassetid://4483345998",
-    Time = 5,
+WindUI:Notify({
+    Title = "MeowMod V3.2",
+    Content = "WindUI loaded. Silent aim as v3.",
+    Duration = 5,
 })
