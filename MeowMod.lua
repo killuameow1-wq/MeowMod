@@ -1,7 +1,7 @@
--- // MEOWMOD | V4.3 | STABLE ESP + HERMETIC UNLOAD + FULL BUILD
--- ESP переписан: head+feet+shoulders, без кэша, без GetBoundingBox.
--- Все функции v3 внутри. Rayfield. Smooth aim. Hitmarker. Vehicle ESP. TP.
--- Unload закрывает ВСЁ. Guard от двойной загрузки.
+-- // MEOWMOD | V4.4 | THROTTLED AIM + STABLE ESP + HERMETIC UNLOAD
+-- Полный файл. Все фиксы внутри: PickTarget 20Hz кэш, хук гейтится isShooting,
+-- ESP 30Hz, FOV circle только при смене, boxOf единый CFrame-снимок,
+-- SWITCH_CD 0.2с. Ничего менять не надо, просто запусти.
 
 if getgenv().MeowModUnload then pcall(getgenv().MeowModUnload); task.wait(0.05) end
 getgenv().MeowModUnloaded = false
@@ -30,10 +30,10 @@ do
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "MeowMod V4.3",
+    Name = "MeowMod V4.4",
     LoadingTitle = "MeowMod",
-    LoadingSubtitle = "stable esp",
-    ConfigurationSaving = { Enabled = true, FolderName = "MeowMod", FileName = "v4_3" },
+    LoadingSubtitle = "throttled",
+    ConfigurationSaving = { Enabled = true, FolderName = "MeowMod", FileName = "v4_4" },
     KeySystem = false,
 })
 
@@ -134,7 +134,7 @@ local isShooting = false
 local silentTarget = nil
 local aimSmoothPos = nil
 local lastSwitch = 0
-local SWITCH_CD = 0.15
+local SWITCH_CD = 0.2
 
 local function FovPx()
     return (Camera.ViewportSize.Y * 0.5) * (C.FOVPercent / 100)
@@ -196,11 +196,22 @@ local function ScoreTarget(p, head, hum, hrp, d3, distPx, vis)
     return score
 end
 
+-- PickTarget кэш 20 Hz — не гоняем полный цикл каждый кадр
+local pickCache = { head = nil, t = 0 }
+local PICK_INTERVAL = 0.05
+
 local function PickTarget()
+    local now = tick()
+    if now - pickCache.t < PICK_INTERVAL and pickCache.head and pickCache.head.Parent then
+        return pickCache.head
+    end
+    pickCache.t = now
     local myChar = LP.Character
     local myHrp  = myChar and myChar:FindFirstChild("HumanoidRootPart")
     local myHum  = myChar and myChar:FindFirstChildOfClass("Humanoid")
-    if not myHrp or not myHum or myHum.Health <= 0 then return nil end
+    if not myHrp or not myHum or myHum.Health <= 0 then
+        pickCache.head = nil; silentTarget = nil; return nil
+    end
     local myPos = myHrp.Position
     local best, bestScore = nil, -math.huge
     for _, p in ipairs(Players:GetPlayers()) do
@@ -225,10 +236,14 @@ local function PickTarget()
     if best then
         if best.Parent ~= silentTarget then lastSwitch = tick() end
         silentTarget = best.Parent
+    else
+        silentTarget = nil
     end
+    pickCache.head = best
     return best
 end
 
+-- namecall hook — гейт по isShooting, никаких Raycast'ов от физики
 local hookMT, oldNamecall, hookInstalled = nil, nil, false
 local function installHook()
     if hookInstalled then return end
@@ -237,8 +252,11 @@ local function installHook()
     setreadonly(mt, false)
     mt.__namecall = newcclosure(function(self, ...)
         if getgenv().MeowModUnloaded then return oldNamecall(self, ...) end
+        if not isShooting or not silentTarget or not silentTarget.Parent then
+            return oldNamecall(self, ...)
+        end
         local method = getnamecallmethod()
-        if silentTarget and silentTarget.Parent and (method == "Raycast" or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList") then
+        if method == "Raycast" or method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
             local head = silentTarget:FindFirstChild("Head")
             if head then
                 local tp = (aimSmoothPos or Predict(head)) + RandomOffset()
@@ -282,10 +300,13 @@ TrackConn(UIS.InputEnded:Connect(function(i, gp)
     end
 end))
 
+-- FOV circle: пишем только при смене
+local fovLastPos, fovLastRadius = nil, nil
 local function UpdateAim(dt)
     if not C.Silent or not isShooting then
         silentTarget = nil; aimSmoothPos = nil
         SilentLine.Visible = false; FOVCircle.Visible = false
+        fovLastPos = nil; fovLastRadius = nil
         return
     end
     local head = PickTarget()
@@ -308,12 +329,20 @@ local function UpdateAim(dt)
             SilentLine.Visible = true
         else SilentLine.Visible = false end
     end
-    FOVCircle.Position = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.5)
-    FOVCircle.Radius = FovPx()
+    local cx, cy = Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.5
+    local r = FovPx()
+    if not fovLastPos or math.abs(fovLastPos.X - cx) > 0.5 or math.abs(fovLastPos.Y - cy) > 0.5 then
+        FOVCircle.Position = Vector2.new(cx, cy)
+        fovLastPos = Vector2.new(cx, cy)
+    end
+    if not fovLastRadius or math.abs(fovLastRadius - r) > 0.5 then
+        FOVCircle.Radius = r
+        fovLastRadius = r
+    end
     FOVCircle.Visible = true
 end
 
--- ═══════════════ ESP v4.3 (стабильный) ═══════════════
+-- ═══════════════ ESP ═══════════════
 local ESP = {}
 
 local BONE_PAIRS = {
@@ -384,6 +413,7 @@ local function dropESP(p)
 end
 TrackConn(Players.PlayerRemoving:Connect(dropESP))
 
+-- boxOf: единый CFrame-снимок, никаких разносных WorldToViewportPoint
 local function boxOf(char)
     local head = char:FindFirstChild("Head")
     if not head then return nil end
@@ -393,16 +423,32 @@ local function boxOf(char)
     local lSh = char:FindFirstChild("LeftUpperArm")
     local rSh = char:FindFirstChild("RightUpperArm")
 
-    local hS, hOn = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
-    local fS, fOn = Camera:WorldToViewportPoint(feet.Position - Vector3.new(0, 0.5, 0))
-    if not (hOn and fOn) then return nil end
+    local camCF = Camera.CFrame
+    local vpSize = Camera.ViewportSize
+    local tanY = math.tan(math.rad(Camera.FieldOfView * 0.5))
+    local tanX = tanY * (vpSize.X / vpSize.Y)
+    local function project(worldPos)
+        local rel = camCF:PointToObjectSpace(worldPos)
+        if rel.Z >= 0 then return nil end
+        local sx = (rel.X / -rel.Z) / tanX * vpSize.X * 0.5 + vpSize.X * 0.5
+        local sy = -(rel.Y / -rel.Z) / tanY * vpSize.Y * 0.5 + vpSize.Y * 0.5
+        return Vector2.new(sx, sy)
+    end
+
+    local hS = project(head.Position + Vector3.new(0, 0.5, 0))
+    local fS = project(feet.Position - Vector3.new(0, 0.5, 0))
+    if not hS or not fS then return nil end
     local h = fS.Y - hS.Y
     if h <= 0 then return nil end
     local w
     if lSh and rSh then
-        local lS = Camera:WorldToViewportPoint(lSh.Position)
-        local rS = Camera:WorldToViewportPoint(rSh.Position)
-        w = math.abs(rS.X - lS.X) * 1.8
+        local lS = project(lSh.Position)
+        local rS = project(rSh.Position)
+        if lS and rS then
+            w = math.abs(rS.X - lS.X) * 1.8
+        else
+            w = h * 0.55
+        end
     else
         w = h * 0.55
     end
@@ -905,13 +951,20 @@ Settings:CreateButton({ Name = "Full Unload", Callback = function()
     if fn then fn() end
 end })
 
--- ═══════════════ RENDER LOOP ═══════════════
+-- ═══════════════ RENDER LOOP (разнесённый троттлинг) ═══════════════
+local espAccum, ESP_INTERVAL = 0, 1 / 30
+local vehAccum, VEH_INTERVAL = 0, 1 / 15
+local chAccum,  CH_INTERVAL  = 0, 1 / 30
+
 TrackConn(RunService.RenderStepped:Connect(function(dt)
     if getgenv().MeowModUnloaded then return end
     UpdateAim(dt)
-    UpdateESP()
-    UpdateVehicleESP()
-    UpdateCrosshair()
+    espAccum = espAccum + dt
+    if espAccum >= ESP_INTERVAL then espAccum = 0; UpdateESP() end
+    vehAccum = vehAccum + dt
+    if vehAccum >= VEH_INTERVAL then vehAccum = 0; UpdateVehicleESP() end
+    chAccum = chAccum + dt
+    if chAccum >= CH_INTERVAL then chAccum = 0; UpdateCrosshair() end
     if Hitmarker.Visible and tick() > hitmarkerUntil then Hitmarker.Visible = false end
     if C.HitboxExp then ApplyHitbox() end
 end))
@@ -920,14 +973,11 @@ end))
 getgenv().MeowModUnload = function()
     if getgenv().MeowModUnloaded then return end
     getgenv().MeowModUnloaded = true
-
     removeHook()
-
     for _, c in ipairs(Connections) do
         pcall(function() if typeof(c) == "RBXScriptConnection" then c:Disconnect() end end)
     end
     Connections = {}
-
     for _, d in ipairs(Drawings) do
         pcall(function() d:Remove() end)
     end
@@ -935,7 +985,6 @@ getgenv().MeowModUnload = function()
     ESP = {}
     VehicleESP = {}
     VehicleSeats = {}
-
     for _, p in ipairs(Players:GetPlayers()) do
         local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
@@ -946,11 +995,7 @@ getgenv().MeowModUnload = function()
             end)
         end
     end
-
-    silentTarget = nil
-    aimSmoothPos = nil
-    isShooting = false
-
+    silentTarget = nil; aimSmoothPos = nil; isShooting = false
     pcall(function() Rayfield:Destroy() end)
     pcall(function()
         getgenv().MeowModUnload = nil
@@ -959,7 +1004,7 @@ getgenv().MeowModUnload = function()
 end
 
 Rayfield:Notify({
-    Title = "MeowMod V4.3",
-    Content = "Stable ESP loaded. All players visible.",
+    Title = "MeowMod V4.4",
+    Content = "Throttled build loaded. No lag, ESP stable.",
     Duration = 5,
 })
