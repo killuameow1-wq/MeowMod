@@ -1,6 +1,4 @@
--- // MEOWMOD | V3.0 // ULTIMATE OVERHAUL
--- Оригинальная логика без изменений. Заменен ТОЛЬКО интерфейс на мобильный Instance.
-
+-- // MEOWMOD | V3.0 // ULTIMATE OVERHAUL (MOBILE UI)
 if getgenv().MeowModUnload then pcall(getgenv().MeowModUnload) end
 if game.Players.LocalPlayer.PlayerGui:FindFirstChild("MeowMod") then
     game.Players.LocalPlayer.PlayerGui.MeowMod:Destroy()
@@ -23,28 +21,15 @@ local CONFIG_PATH = "MeowMod_V3.json"
 local function HasFS() return typeof(writefile) == "function" and typeof(readfile) == "function" end
 
 local DefaultConfig = {
-    SilentAim = false,
-    FOVPercent = 25,
-    MaxDistance = 5000,
-    StrictFOV = true,
-    ShowFOV = true,
-    PredictionMultiplier = 1.0,
-    Headshot = false, WallCheck = false,
-    TeamFilter = "all",
-    Bypass = true, 
-    ESP = false, ESP_Line = false, ESP_Box = false,
-    ESP_Name = false, ESP_Dist = false, ESP_HP = false,
+    SilentAim = false, FOVPercent = 25, MaxDistance = 5000, StrictFOV = true, ShowFOV = true,
+    PredictionMultiplier = 1.0, Headshot = false, WallCheck = false, TeamFilter = "all", Bypass = true,
+    ESP = false, ESP_Line = false, ESP_Box = false, ESP_Name = false, ESP_Dist = false, ESP_HP = false,
     ESP_Skeleton = false, ESP_Offscreen = false, ESP_DistBar = false,
-    V_ESP = false, V_ESP_Box = false, V_ESP_Name = false, V_ESP_Dist = false,
-    V_ESP_MaxDist = 5000,
-    HitboxExpander = false, HitboxSize = 6,
-    Crosshair = false, CH_Size = 12,
-    TP_PlayerOffset = 5, TP_SafeDrop = 4,
-    TP_DropToGround = true,
-    ColorNeon = Color3.fromRGB(0, 240, 255),
-    ColorBg = Color3.fromRGB(10, 10, 14),
-    ColorPanel = Color3.fromRGB(18, 18, 24),
-    ColorVehicle = Color3.fromRGB(255, 165, 0),
+    V_ESP = false, V_ESP_Box = false, V_ESP_Name = false, V_ESP_Dist = false, V_ESP_MaxDist = 5000,
+    HitboxExpander = false, HitboxSize = 6, Crosshair = false, CH_Size = 12,
+    TP_PlayerOffset = 5, TP_SafeDrop = 4, TP_DropToGround = true,
+    ColorNeon = Color3.fromRGB(0, 240, 255), ColorBg = Color3.fromRGB(10, 10, 14),
+    ColorPanel = Color3.fromRGB(18, 18, 24), ColorVehicle = Color3.fromRGB(255, 165, 0),
     ColorSilent = Color3.fromRGB(180, 0, 255),
 }
 local Config = {}
@@ -66,10 +51,7 @@ local function DeserializeConfig(t)
 end
 local function LoadConfig()
     if not HasFS() then return end
-    local ok, data = pcall(function()
-        if not isfile(CONFIG_PATH) then return nil end
-        return readfile(CONFIG_PATH)
-    end)
+    local ok, data = pcall(function() if not isfile(CONFIG_PATH) then return nil end return readfile(CONFIG_PATH) end)
     if not ok or not data or data == "" then return end
     local ok2, parsed = pcall(function() return Http:JSONDecode(data) end)
     if ok2 and parsed then DeserializeConfig(parsed) end
@@ -79,20 +61,6 @@ local function SaveConfig()
     return pcall(function() writefile(CONFIG_PATH, Http:JSONEncode(SerializeConfig())) end)
 end
 LoadConfig()
-
--- ═══════════════ LOGGER (Оригинал) ═══════════════
-local ErrorLogs = {}
-local LogFilter = "all"
-local LogCounters = {}
-local LogChipLabels = {}
-local LOG_COLORS = {
-    AIM = Color3.fromRGB(255,100,100), ESP = Color3.fromRGB(100,200,255),
-    VEH = Color3.fromRGB(255,165,0), AI = Color3.fromRGB(180,120,255),
-    TP = Color3.fromRGB(120,255,180), CONFIG = Color3.fromRGB(0,240,200),
-    SYS = Color3.fromRGB(255,200,50),
-}
-local function LogColor(cat) return LOG_COLORS[cat] or Color3.fromRGB(200,200,200) end
-local function LogError(msg, cat) end
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MeowMod"
@@ -104,13 +72,11 @@ local Connections, Drawings = {}, {}
 local function AddConn(c) table.insert(Connections, c) end
 local function AddDraw(d) table.insert(Drawings, d) end
 
--- ═══════════════ НОВЫЙ МОБИЛЬНЫЙ UI ═══════════════
-local isOpen = false
+-- ═══════════════ UI ═══════════════
 local Main = Instance.new("Frame")
 Main.Size = UDim2.new(0, 320, 0, 460)
 Main.Position = UDim2.new(0.5, -160, 0.5, -230)
 Main.BackgroundColor3 = Config.ColorBg
-Main.BackgroundTransparency = 0.05
 Main.BorderSizePixel = 0
 Main.Active = true; Main.Draggable = true
 Main.Visible = false
@@ -130,7 +96,7 @@ local TitleLabel = Instance.new("TextLabel")
 TitleLabel.Size = UDim2.new(1, -120, 1, 0)
 TitleLabel.Position = UDim2.new(0, 16, 0, 0)
 TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "MEOW V3"
+TitleLabel.Text = "MEOW MOBILE"
 TitleLabel.TextColor3 = Config.ColorNeon
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.Font = Enum.Font.GothamBlack
@@ -159,7 +125,6 @@ TabBar.Parent = Main
 local TL = Instance.new("UIListLayout", TabBar)
 TL.FillDirection = Enum.FillDirection.Horizontal
 TL.Padding = UDim.new(0, 6)
-TL.SortOrder = Enum.SortOrder.LayoutOrder
 
 local Pages = {}
 local function CreateTab(name, order)
@@ -189,7 +154,6 @@ local function CreateTab(name, order)
     Page.Parent = Main
     local L = Instance.new("UIListLayout", Page)
     L.Padding = UDim.new(0, 8)
-    L.SortOrder = Enum.SortOrder.LayoutOrder
     Pages[name] = Page
 
     Btn.MouseButton1Click:Connect(function()
@@ -225,35 +189,27 @@ local function CreateToggle(parent, name, def, cb, cfgKey)
     TLbl.Size = UDim2.new(1, -80, 1, 0)
     TLbl.Position = UDim2.new(0, 14, 0, 0)
     TLbl.BackgroundTransparency = 1
-    TLbl.Text = name
-    TLbl.TextColor3 = Color3.fromRGB(225,225,230)
+    TLbl.Text = name; TLbl.TextColor3 = Color3.fromRGB(225,225,230)
     TLbl.TextXAlignment = Enum.TextXAlignment.Left
-    TLbl.Font = Enum.Font.GothamMedium
-    TLbl.TextSize = 13
+    TLbl.Font = Enum.Font.GothamMedium; TLbl.TextSize = 13
     TLbl.Parent = Btn
     local Ind = Instance.new("Frame")
     Ind.Size = UDim2.new(0, 42, 0, 24)
     Ind.Position = UDim2.new(1, -54, 0.5, -12)
     Ind.BackgroundColor3 = def and Config.ColorNeon or Color3.fromRGB(55,55,70)
-    Ind.BorderSizePixel = 0
-    Ind.Parent = Btn
+    Ind.BorderSizePixel = 0; Ind.Parent = Btn
     Instance.new("UICorner", Ind).CornerRadius = UDim.new(1, 0)
     local Circ = Instance.new("Frame")
     Circ.Size = UDim2.new(0, 18, 0, 18)
     Circ.Position = def and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
     Circ.BackgroundColor3 = Color3.fromRGB(255,255,255)
-    Circ.BorderSizePixel = 0
-    Circ.Parent = Ind
+    Circ.BorderSizePixel = 0; Circ.Parent = Ind
     Instance.new("UICorner", Circ).CornerRadius = UDim.new(1, 0)
     local State = def
     AddConn(Btn.MouseButton1Click:Connect(function()
         State = not State
-        TweenService:Create(Ind, TweenInfo.new(0.15), {
-            BackgroundColor3 = State and Config.ColorNeon or Color3.fromRGB(55,55,70)
-        }):Play()
-        TweenService:Create(Circ, TweenInfo.new(0.15), {
-            Position = State and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 3, 0.5, -9)
-        }):Play()
+        TweenService:Create(Ind, TweenInfo.new(0.15), { BackgroundColor3 = State and Config.ColorNeon or Color3.fromRGB(55,55,70) }):Play()
+        TweenService:Create(Circ, TweenInfo.new(0.15), { Position = State and UDim2.new(1, -20, 0.5, -9) or UDim2.new(0, 3, 0.5, -9) }):Play()
         if cfgKey then Config[cfgKey] = State end
         if cb then cb(State) end
         QueueSave()
@@ -264,8 +220,7 @@ local function CreateSlider(parent, name, mn, mx, def, cb, cfgKey)
     local F = Instance.new("Frame")
     F.Size = UDim2.new(1, 0, 0, 60)
     F.BackgroundColor3 = Config.ColorPanel
-    F.BorderSizePixel = 0
-    F.Parent = parent
+    F.BorderSizePixel = 0; F.Parent = parent
     Instance.new("UICorner", F).CornerRadius = UDim.new(0, 8)
     local TLbl = Instance.new("TextLabel")
     TLbl.Size = UDim2.new(1, -20, 0, 22)
@@ -274,28 +229,23 @@ local function CreateSlider(parent, name, mn, mx, def, cb, cfgKey)
     TLbl.Text = name..": "..tostring(def)
     TLbl.TextColor3 = Color3.fromRGB(225,225,230)
     TLbl.TextXAlignment = Enum.TextXAlignment.Left
-    TLbl.Font = Enum.Font.GothamMedium
-    TLbl.TextSize = 13
+    TLbl.Font = Enum.Font.GothamMedium; TLbl.TextSize = 13
     TLbl.Parent = F
     local Bg = Instance.new("Frame")
     Bg.Size = UDim2.new(1, -28, 0, 8)
     Bg.Position = UDim2.new(0, 14, 0, 38)
     Bg.BackgroundColor3 = Color3.fromRGB(40,40,50)
-    Bg.BorderSizePixel = 0
-    Bg.Parent = F
+    Bg.BorderSizePixel = 0; Bg.Parent = F
     Instance.new("UICorner", Bg).CornerRadius = UDim.new(1, 0)
     local Fill = Instance.new("Frame")
     Fill.Size = UDim2.new((def-mn)/(mx-mn), 0, 1, 0)
     Fill.BackgroundColor3 = Config.ColorNeon
-    Fill.BorderSizePixel = 0
-    Fill.Parent = Bg
+    Fill.BorderSizePixel = 0; Fill.Parent = Bg
     Instance.new("UICorner", Fill).CornerRadius = UDim.new(1, 0)
     local Hit = Instance.new("TextButton")
     Hit.Size = UDim2.new(1, 0, 4, 0)
     Hit.Position = UDim2.new(0, 0, -1.5, 0)
-    Hit.BackgroundTransparency = 1
-    Hit.Text = ""
-    Hit.Parent = Bg
+    Hit.BackgroundTransparency = 1; Hit.Text = ""; Hit.Parent = Bg
     local dragging = false
     local function Update(input)
         local pos = math.clamp((input.Position.X - Bg.AbsolutePosition.X)/Bg.AbsoluteSize.X, 0, 1)
@@ -329,14 +279,11 @@ local function CreateButton(parent, name, cb)
     Btn.BackgroundColor3 = Color3.fromRGB(30,30,45)
     Btn.Text = name; Btn.TextColor3 = Config.ColorNeon
     Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13
-    Btn.AutoButtonColor = false
-    Btn.BorderSizePixel = 0
-    Btn.Parent = parent
+    Btn.AutoButtonColor = false; Btn.BorderSizePixel = 0; Btn.Parent = parent
     Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 8)
     Btn.MouseButton1Click:Connect(function()
         Btn.BackgroundColor3 = Color3.fromRGB(0,255,150)
-        task.wait(0.2)
-        Btn.BackgroundColor3 = Color3.fromRGB(30,30,45)
+        task.wait(0.2); Btn.BackgroundColor3 = Color3.fromRGB(30,30,45)
         if cb then cb() end
     end)
 end
@@ -348,9 +295,7 @@ local function CreateCycle(parent, name, options, default, cb, cfgKey)
     Btn.Text = name..": "..default
     Btn.TextColor3 = Config.ColorNeon
     Btn.Font = Enum.Font.GothamBold; Btn.TextSize = 13
-    Btn.AutoButtonColor = false
-    Btn.BorderSizePixel = 0
-    Btn.Parent = parent
+    Btn.AutoButtonColor = false; Btn.BorderSizePixel = 0; Btn.Parent = parent
     Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 8)
     local idx = 1
     for i, o in ipairs(options) do if o == default then idx = i break end end
@@ -366,22 +311,17 @@ end
 CreateTab("Combat", 1); CreateTab("Visuals", 2); CreateTab("Players", 3)
 CreateTab("Vehicles", 4); CreateTab("Teleport", 5)
 
--- Флоат-кнопка для мобилы
 local FloatBtn = Instance.new("TextButton")
 FloatBtn.Size = UDim2.new(0, 50, 0, 50)
 FloatBtn.Position = UDim2.new(0, 15, 0.4, 0)
 FloatBtn.BackgroundColor3 = Config.ColorNeon
 FloatBtn.Text = "M"; FloatBtn.TextColor3 = Color3.fromRGB(0,0,0)
 FloatBtn.Font = Enum.Font.GothamBlack; FloatBtn.TextSize = 20
-FloatBtn.BorderSizePixel = 0
-FloatBtn.Draggable = true
-FloatBtn.Parent = ScreenGui
+FloatBtn.BorderSizePixel = 0; FloatBtn.Draggable = true; FloatBtn.Parent = ScreenGui
 Instance.new("UICorner", FloatBtn).CornerRadius = UDim.new(1, 0)
-
 FloatBtn.MouseButton1Click:Connect(function() Main.Visible = true; FloatBtn.Visible = false end)
 CloseBtn.MouseButton1Click:Connect(function() Main.Visible = false; FloatBtn.Visible = true end)
 
--- Автовыбор первой вкладки
 task.spawn(function()
     task.wait(0.1)
     for _, b in pairs(TabBar:GetChildren()) do
@@ -393,32 +333,21 @@ task.spawn(function()
     end
 end)
 
--- ═══════════════ ДАЛЬШЕ ОРИГИНАЛ БЕЗ ИЗМЕНЕНИЙ ═══════════════
--- TELEPORT v8
+-- ═══════════════ TP & UI CONTROLS ═══════════════
 local function GetGroundY(pos)
     local rp = RaycastParams.new()
-    rp.FilterDescendantsInstances = {LP.Character}
-    rp.FilterType = Enum.RaycastFilterType.Exclude
+    rp.FilterDescendantsInstances = {LP.Character}; rp.FilterType = Enum.RaycastFilterType.Exclude
     local ray = Ray.new(pos + Vector3.new(0, 500, 0), Vector3.new(0, -1000, 0))
     local hit = WS:Raycast(ray.Origin, ray.Direction, rp)
-    if hit then return hit.Position.Y end
-    return nil
+    return hit and hit.Position.Y or nil
 end
-
 local function SafeTeleport(pos, label)
-    local c = LP.Character
-    local hrp = c and c:FindFirstChild("HumanoidRootPart")
+    local c = LP.Character; local hrp = c and c:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
     local targetY = pos.Y
-    if Config.TP_DropToGround then
-        local groundY = GetGroundY(pos)
-        if groundY then targetY = groundY + 3.5 end
-    end
+    if Config.TP_DropToGround then local gy = GetGroundY(pos); if gy then targetY = gy + 3.5 end end
     hrp.CFrame = CFrame.new(Vector3.new(pos.X, targetY + (Config.TP_SafeDrop or 4), pos.Z))
-    pcall(function()
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
-    end)
+    pcall(function() hrp.AssemblyLinearVelocity = Vector3.zero; hrp.AssemblyAngularVelocity = Vector3.zero end)
     return true
 end
 
@@ -432,19 +361,11 @@ local function TPBase()
         if o:IsA("SpawnLocation") and o.Enabled then
             local matches = false
             if myColor and o.BrickColor.Color == myColor then matches = true end
-            if not matches and myTeam ~= "" then
-                local path = o:GetFullName():lower()
-                if path:find(myTeam) then matches = true end
-            end
-            if not matches and o.Neutral and myTeam == "" then matches = true end
-            if matches then
-                local d = (myPos - o.Position).Magnitude
-                if d < bestDist then bestDist = d; best = {pos = o.Position, name = o:GetFullName()} end
-            end
+            if not matches and myTeam ~= "" and o:GetFullName():lower():find(myTeam) then matches = true end
+            if matches then local d = (myPos - o.Position).Magnitude; if d < bestDist then bestDist = d; best = o.Position end end
         end
     end
-    if best then return SafeTeleport(best.pos, "Base(spawn)") end
-    return false
+    if best then return SafeTeleport(best, "Base") end
 end
 
 local function TPAirdrop()
@@ -455,20 +376,12 @@ local function TPAirdrop()
         if o and (o:IsA("BasePart") or o:IsA("Model")) then
             local n = o.Name:lower()
             if n:find("airdrop") or n:find("crate") or n:find("parachute") then
-                local path = o:GetFullName():lower()
-                local bad = path:find("menu") or path:find("shop") or path:find("base") or path:find("spawn")
-                if not bad then
-                    local p = o:IsA("BasePart") and o.Position or (o.PrimaryPart and o.PrimaryPart.Position)
-                    if p then
-                        local score = 100 - math.clamp((myPos - p).Magnitude * 0.05, 0, 100)
-                        if score > bestScore then bestScore = score; best = p end
-                    end
-                end
+                local p = o:IsA("BasePart") and o.Position or (o.PrimaryPart and o.PrimaryPart.Position)
+                if p then local score = 100 - math.clamp((myPos - p).Magnitude * 0.05, 0, 100); if score > bestScore then bestScore = score; best = p end end
             end
         end
     end
     if best then return SafeTeleport(best, "Airdrop") end
-    return false
 end
 
 local function TPCrashedUAV()
@@ -479,20 +392,12 @@ local function TPCrashedUAV()
         if o and (o:IsA("BasePart") or o:IsA("Model")) then
             local n = o.Name:lower()
             if n:find("uav") or n:find("drone") or n:find("crashed") or n:find("wreck") then
-                local path = o:GetFullName():lower()
-                local bad = path:find("spawn") or path:find("pad") or path:find("hangar")
-                if not bad then
-                    local p = o:IsA("BasePart") and o.Position or (o.PrimaryPart and o.PrimaryPart.Position)
-                    if p then
-                        local score = 100 - math.clamp((myPos - p).Magnitude * 0.05, 0, 100)
-                        if score > bestScore then bestScore = score; best = p end
-                    end
-                end
+                local p = o:IsA("BasePart") and o.Position or (o.PrimaryPart and o.PrimaryPart.Position)
+                if p then local score = 100 - math.clamp((myPos - p).Magnitude * 0.05, 0, 100); if score > bestScore then bestScore = score; best = p end end
             end
         end
     end
     if best then return SafeTeleport(best, "UAV") end
-    return false
 end
 
 local function TPCapture()
@@ -502,22 +407,15 @@ local function TPCapture()
     local best, bestScore = nil, -math.huge
     for _, o in pairs(WS:GetDescendants()) do
         if o and o:IsA("BasePart") then
-            local n = o.Name:lower()
-            if n:find("flag") and o.Position.Y > myPos.Y + 3 then
-                local path = o:GetFullName():lower()
-                local bad = path:find("spawn") or path:find("base") or path:find("barracks")
-                if not bad then
-                    local score = 500 - math.clamp((myPos - o.Position).Magnitude * 0.05, 0, 100)
-                    if score > bestScore then bestScore = score; best = o.Position end
-                end
+            if o.Name:lower():find("flag") and o.Position.Y > myPos.Y + 3 then
+                local score = 500 - math.clamp((myPos - o.Position).Magnitude * 0.05, 0, 100)
+                if score > bestScore then bestScore = score; best = o.Position end
             end
         end
     end
     if best then return SafeTeleport(best, "Capture") end
-    return false
 end
 
--- UI Controls
 CreateToggle(Pages["Combat"], "Silent Aim", Config.SilentAim, nil, "SilentAim")
 CreateToggle(Pages["Combat"], "Strict FOV", Config.StrictFOV, nil, "StrictFOV")
 CreateToggle(Pages["Combat"], "Show FOV Circle", Config.ShowFOV, nil, "ShowFOV")
@@ -540,14 +438,7 @@ CreateToggle(Pages["Visuals"], " - Dist Bar", Config.ESP_DistBar, nil, "ESP_Dist
 CreateCycle(Pages["Visuals"], "Team Filter", {"all", "enemy", "my"}, Config.TeamFilter, nil, "TeamFilter")
 CreateToggle(Pages["Visuals"], "Hitbox Expander", Config.HitboxExpander, function(v)
     Config.HitboxExpander = v
-    if not v then
-        for _, p in pairs(Players:GetPlayers()) do
-            local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                hrp.Size = Vector3.new(2,2,1); hrp.Transparency = 1; hrp.CanCollide = true
-            end
-        end
-    end
+    if not v then for _, p in pairs(Players:GetPlayers()) do local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart"); if hrp then hrp.Size = Vector3.new(2,2,1); hrp.Transparency = 1; hrp.CanCollide = true end end end
 end, "HitboxExpander")
 CreateSlider(Pages["Visuals"], "Hitbox Size", 2, 20, Config.HitboxSize, nil, "HitboxSize")
 CreateToggle(Pages["Visuals"], "Crosshair", Config.Crosshair, nil, "Crosshair")
@@ -555,13 +446,7 @@ CreateSlider(Pages["Visuals"], "CH Size", 5, 30, Config.CH_Size, nil, "CH_Size")
 
 CreateToggle(Pages["Vehicles"], "Vehicle ESP", Config.V_ESP, function(v)
     Config.V_ESP = v
-    if not v then
-        for model, d in pairs(VehicleESP) do
-            if d.Box then pcall(function() d.Box.Visible = false end) end
-            if d.Name then pcall(function() d.Name.Visible = false end) end
-            if d.Dist then pcall(function() d.Dist.Visible = false end) end
-        end
-    end
+    if not v then for model, d in pairs(VehicleESP) do if d.Box then pcall(function() d.Box.Visible = false end) end end end
 end, "V_ESP")
 CreateToggle(Pages["Vehicles"], " - Box", Config.V_ESP_Box, nil, "V_ESP_Box")
 CreateToggle(Pages["Vehicles"], " - Name", Config.V_ESP_Name, nil, "V_ESP_Name")
@@ -574,51 +459,25 @@ CreateButton(Pages["Teleport"], "TP Base", TPBase)
 CreateButton(Pages["Teleport"], "TP Airdrop", TPAirdrop)
 CreateButton(Pages["Teleport"], "TP Crashed UAV", TPCrashedUAV)
 CreateButton(Pages["Teleport"], "TP Capture Point", TPCapture)
-CreateButton(Pages["Teleport"], "TP Nearest Enemy", function()
-    local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    if not myHrp then return end
-    local best, bestD = nil, math.huge
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= LP and p.Character then
-            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-            if hrp and hum and hum.Health > 0 then
-                local isEnemy = LP.Team and p.Team and p.Team ~= LP.Team
-                if isEnemy or not LP.Team then
-                    local d = (myHrp.Position - hrp.Position).Magnitude
-                    if d < bestD then bestD = d; best = hrp end
-                end
-            end
-        end
-    end
-    if best then SafeTeleport(best.Position + Vector3.new(0, 3, 0), "nearest enemy") end
-end)
 
--- UTIL
 local function DistToColor(d)
     local t = math.clamp(d/400, 0, 1)
-    if d <= 100 then
-        local k = d/100
-        return Color3.fromRGB(math.floor(255-k*55), math.floor(60+k*120), 60)
-    end
+    if d <= 100 then return Color3.fromRGB(math.floor(255-d*0.55), math.floor(60+d*1.2), 60) end
     return Color3.fromRGB(math.floor(200*(1-t)), math.floor(180+75*t), math.floor(60+80*t))
 end
+
 local function PassesTeamFilter(p)
     if Config.TeamFilter == "all" then return true end
-    local myTeam = LP.Team
-    if not myTeam then return true end
+    local myTeam = LP.Team; if not myTeam then return true end
     if Config.TeamFilter == "my" then return p.Team == myTeam end
     if Config.TeamFilter == "enemy" then return p.Team ~= myTeam end
     return true
 end
 
--- PLAYER LIST
 local PL = Instance.new("UIListLayout", Pages["Players"])
 PL.Padding = UDim.new(0, 6)
 local function UpdatePlayerList()
-    for _, v in pairs(Pages["Players"]:GetChildren()) do
-        if v:IsA("TextButton") then v:Destroy() end
-    end
+    for _, v in pairs(Pages["Players"]:GetChildren()) do if v:IsA("TextButton") then v:Destroy() end end
     local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LP and p.Character and PassesTeamFilter(p) then
@@ -632,16 +491,11 @@ local function UpdatePlayerList()
                 Btn.Text = "  "..p.Name.."  ["..d.."m]"
                 Btn.TextColor3 = DistToColor(d)
                 Btn.TextXAlignment = Enum.TextXAlignment.Left
-                Btn.Font = Enum.Font.GothamMedium
-                Btn.TextSize = 13
-                Btn.BorderSizePixel = 0
-                Btn.Parent = Pages["Players"]
+                Btn.Font = Enum.Font.GothamMedium; Btn.TextSize = 13
+                Btn.BorderSizePixel = 0; Btn.Parent = Pages["Players"]
                 Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 8)
                 Btn.MouseButton1Click:Connect(function()
-                    if hrp then
-                        SafeTeleport(hrp.Position + Vector3.new(Config.TP_PlayerOffset, 3, Config.TP_PlayerOffset),
-                            "player "..p.Name)
-                    end
+                    if hrp then SafeTeleport(hrp.Position + Vector3.new(Config.TP_PlayerOffset, 3, Config.TP_PlayerOffset), "player") end
                 end)
             end
         end
@@ -649,61 +503,28 @@ local function UpdatePlayerList()
 end
 task.spawn(function() while task.wait(2) do UpdatePlayerList() end end)
 
--- VEHICLES
 local VehicleSeats = {}
 local VehicleESP = {}
-local function GetVehicleModel(seat)
-    return seat:FindFirstAncestorOfClass("Model") or seat:FindFirstAncestorOfClass("Folder")
-end
-local function ModelAnchor(model)
-    if model.PrimaryPart then return model.PrimaryPart end
-    return model:FindFirstChildWhichIsA("BasePart", true)
-end
-local function RegisterSeat(seat)
-    if VehicleSeats[seat] then return end
-    local model = GetVehicleModel(seat)
-    if model then VehicleSeats[seat] = model end
-end
-local function UnregisterSeat(seat) VehicleSeats[seat] = nil end
+local function ModelAnchor(model) return model.PrimaryPart or model:FindFirstChildWhichIsA("BasePart", true) end
 local function ScanAllVehicles()
-    pcall(function()
-        for _, inst in ipairs(CollSvc:GetTagged("VehicleSeat")) do
-            if inst:IsA("VehicleSeat") then RegisterSeat(inst) end
-        end
-    end)
-    for _, inst in ipairs(WS:GetDescendants()) do
-        if inst:IsA("VehicleSeat") then RegisterSeat(inst) end
-    end
+    for _, inst in ipairs(WS:GetDescendants()) do if inst:IsA("VehicleSeat") then local m = inst:FindFirstAncestorOfClass("Model") or inst:FindFirstAncestorOfClass("Folder"); if m then VehicleSeats[inst] = m end end end
 end
 ScanAllVehicles()
-AddConn(WS.DescendantAdded:Connect(function(inst)
-    if inst:IsA("VehicleSeat") then RegisterSeat(inst) end
-end))
-AddConn(WS.DescendantRemoving:Connect(function(inst)
-    if inst:IsA("VehicleSeat") then UnregisterSeat(inst) end
-end))
+AddConn(WS.DescendantAdded:Connect(function(inst) if inst:IsA("VehicleSeat") then local m = inst:FindFirstAncestorOfClass("Model") or inst:FindFirstAncestorOfClass("Folder"); if m then VehicleSeats[inst] = m end end end))
 
 local function CollectUniqueModels()
     local seen, list = {}, {}
-    for _, model in pairs(VehicleSeats) do
-        if model and model.Parent and not seen[model] then
-            seen[model] = true
-            table.insert(list, model)
-        end
-    end
+    for _, model in pairs(VehicleSeats) do if model and model.Parent and not seen[model] then seen[model] = true; table.insert(list, model) end end
     return list
 end
 
 local VL = Instance.new("UIListLayout", Pages["Vehicles"])
 VL.Padding = UDim.new(0, 6)
 local function UpdateVehicleList()
-    for _, v in pairs(Pages["Vehicles"]:GetChildren()) do
-        if v:IsA("TextButton") and v:GetAttribute("isVeh") then v:Destroy() end
-    end
+    for _, v in pairs(Pages["Vehicles"]:GetChildren()) do if v:IsA("TextButton") and v:GetAttribute("isVeh") then v:Destroy() end end
     local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
     if not myHrp then return end
-    local models = CollectUniqueModels()
-    for _, model in ipairs(models) do
+    for _, model in ipairs(CollectUniqueModels()) do
         local anchor = ModelAnchor(model)
         if anchor then
             local d = math.floor((myHrp.Position - anchor.Position).Magnitude)
@@ -714,59 +535,20 @@ local function UpdateVehicleList()
             Btn.Text = "  "..model.Name.."  ["..d.."m]"
             Btn.TextColor3 = DistToColor(d)
             Btn.TextXAlignment = Enum.TextXAlignment.Left
-            Btn.Font = Enum.Font.GothamMedium
-            Btn.TextSize = 13
-            Btn.BorderSizePixel = 0
-            Btn.Parent = Pages["Vehicles"]
+            Btn.Font = Enum.Font.GothamMedium; Btn.TextSize = 13
+            Btn.BorderSizePixel = 0; Btn.Parent = Pages["Vehicles"]
             Instance.new("UICorner", Btn).CornerRadius = UDim.new(0, 8)
-            Btn.MouseButton1Click:Connect(function()
-                if anchor and anchor.Parent then
-                    SafeTeleport(anchor.Position + Vector3.new(0, 6, 0), "vehicle")
-                end
-            end)
+            Btn.MouseButton1Click:Connect(function() if anchor then SafeTeleport(anchor.Position + Vector3.new(0, 6, 0), "vehicle") end end)
         end
     end
 end
 task.spawn(function() while task.wait(3) do UpdateVehicleList() end end)
 
--- UNLOAD
-getgenv().MeowModUnload = function()
-    for _, c in pairs(Connections) do
-        if typeof(c) == "RBXScriptConnection" then c:Disconnect() end
-    end
-    for _, d in pairs(Drawings) do pcall(function() d:Remove() end) end
-    for _, p in pairs(Players:GetPlayers()) do
-        local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            hrp.Size = Vector3.new(2,2,1); hrp.Transparency = 1; hrp.CanCollide = true
-        end
-    end
-    pcall(function()
-        RunService:UnbindFromRenderStep("MeowESP")
-        RunService:UnbindFromRenderStep("MeowLogic")
-    end)
-    if ScreenGui then ScreenGui:Destroy() end
-end
-
--- DEBUG HUD
-local DebugHUD = Instance.new("TextLabel")
-DebugHUD.Size = UDim2.new(0, 400, 0, 30)
-DebugHUD.Position = UDim2.new(0.5, -200, 1, -40)
-DebugHUD.BackgroundTransparency = 1
-DebugHUD.Text = "FOV Debug: --"
-DebugHUD.TextColor3 = Config.ColorSilent
-DebugHUD.Font = Enum.Font.Code
-DebugHUD.TextSize = 14
-DebugHUD.Parent = ScreenGui
-
--- CROSSHAIR
-local CH1 = Drawing.new("Line")
-local CH2 = Drawing.new("Line")
-CH1.Thickness = 2; CH2.Thickness = 2
-CH1.Color = Config.ColorNeon; CH2.Color = Config.ColorNeon
+-- ═══════════════ DRAWINGS (ESP, Silent, FOV) ═══════════════
+local CH1 = Drawing.new("Line"); local CH2 = Drawing.new("Line")
+CH1.Thickness = 2; CH2.Thickness = 2; CH1.Color = Config.ColorNeon; CH2.Color = Config.ColorNeon
 AddDraw(CH1); AddDraw(CH2)
 
--- ESP
 local ESP = {}
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 1.5; FOVCircle.Transparency = 0.8
@@ -774,266 +556,124 @@ FOVCircle.Color = Config.ColorNeon; FOVCircle.Filled = false
 AddDraw(FOVCircle)
 
 local BONE_PAIRS = {
-    {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
-    {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"},
-    {"LeftLowerArm", "LeftHand"},
-    {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"},
-    {"RightLowerArm", "RightHand"},
-    {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"},
-    {"LeftLowerLeg", "LeftFoot"},
-    {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"},
-    {"RightLowerLeg", "RightFoot"},
+    {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"}, {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"},
+    {"LeftLowerArm", "LeftHand"}, {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"},
+    {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"},
+    {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"},
 }
 
 local function ForceHide(d)
     if not d then return end
-    if d.Line then d.Line.Visible = false end
-    if d.Box then d.Box.Visible = false end
-    if d.NameBg then d.NameBg.Visible = false end
-    if d.Name then d.Name.Visible = false end
-    if d.Dist then d.Dist.Visible = false end
-    if d.HpBg then d.HpBg.Visible = false end
-    if d.HpBar then d.HpBar.Visible = false end
-    if d.HpText then d.HpText.Visible = false end
-    if d.OffArrow then d.OffArrow.Visible = false end
-    if d.DistBarBg then d.DistBarBg.Visible = false end
+    if d.Line then d.Line.Visible = false end; if d.Box then d.Box.Visible = false end
+    if d.NameBg then d.NameBg.Visible = false end; if d.Name then d.Name.Visible = false end
+    if d.Dist then d.Dist.Visible = false end; if d.HpBg then d.HpBg.Visible = false end
+    if d.HpBar then d.HpBar.Visible = false end; if d.HpText then d.HpText.Visible = false end
+    if d.OffArrow then d.OffArrow.Visible = false end; if d.DistBarBg then d.DistBarBg.Visible = false end
     if d.DistBarFg then d.DistBarFg.Visible = false end
     if d.Bones then for _, b in pairs(d.Bones) do pcall(function() b.Visible = false end) end end
 end
 
-local ESP_FAILS = {}
 local function CreateDraw(player)
     if ESP[player] then return ESP[player] end
-    local ok, tbl = pcall(function()
-        local t = {
-            Line = Drawing.new("Line"), Box = Drawing.new("Square"),
-            NameBg = Drawing.new("Square"), Name = Drawing.new("Text"),
-            Dist = Drawing.new("Text"), HpBg = Drawing.new("Square"),
-            HpBar = Drawing.new("Square"), HpText = Drawing.new("Text"),
-            OffArrow = Drawing.new("Triangle"),
-            DistBarBg = Drawing.new("Square"), DistBarFg = Drawing.new("Square"),
-            Bones = {},
-        }
-        for i = 1, #BONE_PAIRS do
-            t.Bones[i] = Drawing.new("Line"); t.Bones[i].Thickness = 1
-        end
-        return t
-    end)
-    if not ok or not tbl then return nil end
-    tbl.Line.Thickness = 1; tbl.Box.Thickness = 1
-    tbl.NameBg.Filled = true; tbl.NameBg.Color = Color3.fromRGB(15,15,22); tbl.NameBg.Transparency = 0.7
-    tbl.Name.Size = 13; tbl.Name.Center = true; tbl.Name.Outline = true
-    tbl.Dist.Size = 12; tbl.Dist.Center = true; tbl.Dist.Outline = true
-    tbl.HpBg.Filled = true; tbl.HpBg.Color = Color3.fromRGB(0,0,0)
-    tbl.HpBar.Filled = true
-    tbl.HpText.Size = 10; tbl.HpText.Center = true; tbl.HpText.Outline = true
-    tbl.OffArrow.Filled = true
-    tbl.DistBarBg.Filled = true; tbl.DistBarFg.Filled = true
-    for k, v in pairs(tbl) do if k ~= "Bones" then AddDraw(v) end end
-    for _, b in pairs(tbl.Bones) do AddDraw(b) end
-    ESP[player] = tbl
-    return tbl
+    local t = {
+        Line = Drawing.new("Line"), Box = Drawing.new("Square"), NameBg = Drawing.new("Square"), Name = Drawing.new("Text"),
+        Dist = Drawing.new("Text"), HpBg = Drawing.new("Square"), HpBar = Drawing.new("Square"), HpText = Drawing.new("Text"),
+        OffArrow = Drawing.new("Triangle"), DistBarBg = Drawing.new("Square"), DistBarFg = Drawing.new("Square"), Bones = {},
+    }
+    for i = 1, #BONE_PAIRS do t.Bones[i] = Drawing.new("Line"); t.Bones[i].Thickness = 1 end
+    t.Line.Thickness = 1; t.Box.Thickness = 1
+    t.NameBg.Filled = true; t.NameBg.Color = Color3.fromRGB(15,15,22); t.NameBg.Transparency = 0.7
+    t.Name.Size = 13; t.Name.Center = true; t.Name.Outline = true
+    t.Dist.Size = 12; t.Dist.Center = true; t.Dist.Outline = true
+    t.HpBg.Filled = true; t.HpBg.Color = Color3.fromRGB(0,0,0); t.HpBar.Filled = true
+    t.HpText.Size = 10; t.HpText.Center = true; t.HpText.Outline = true
+    t.OffArrow.Filled = true; t.DistBarBg.Filled = true; t.DistBarFg.Filled = true
+    for k, v in pairs(t) do if k ~= "Bones" then AddDraw(v) end end
+    for _, b in pairs(t.Bones) do AddDraw(b) end
+    ESP[player] = t; return t
 end
 local function RemoveDraw(player)
-    if ESP[player] then
-        for k, v in pairs(ESP[player]) do
-            if k == "Bones" then
-                for _, b in pairs(v) do pcall(function() b:Remove() end) end
-            else pcall(function() v:Remove() end) end
-        end
-        ESP[player] = nil
-    end
+    if ESP[player] then for k, v in pairs(ESP[player]) do if k == "Bones" then for _, b in pairs(v) do pcall(function() b:Remove() end) end else pcall(function() v:Remove() end) end end ESP[player] = nil end
 end
 AddConn(Players.PlayerRemoving:Connect(RemoveDraw))
 
 local function OffscreenArrowPos(sp, margin)
-    local vp = Camera.ViewportSize
-    local cx, cy = vp.X/2, vp.Y/2
+    local vp = Camera.ViewportSize; local cx, cy = vp.X/2, vp.Y/2
     local dx, dy = sp.X - cx, sp.Y - cy
     if math.abs(dx) < 0.001 and math.abs(dy) < 0.001 then dx = 1 end
-    local tx = (cx - margin) / math.max(math.abs(dx), 0.0001)
-    local ty = (cy - margin) / math.max(math.abs(dy), 0.0001)
-    local t = math.min(tx, ty)
-    return Vector2.new(cx + dx*t, cy + dy*t)
+    local tx = (cx - margin) / math.max(math.abs(dx), 0.0001); local ty = (cy - margin) / math.max(math.abs(dy), 0.0001)
+    return Vector2.new(cx + dx*math.min(tx, ty), cy + dy*math.min(tx, ty))
 end
 
-local function GetScreenBox(char, hrp)
-    local ok, cf, size = pcall(function() return char:GetBoundingBox() end)
-    if ok and cf and size then
-        local tS, tOn = Camera:WorldToViewportPoint(cf.Position + Vector3.new(0, size.Y/2, 0))
-        local bS, bOn = Camera:WorldToViewportPoint(cf.Position - Vector3.new(0, size.Y/2, 0))
-        local lS, lOn = Camera:WorldToViewportPoint(cf.Position - Vector3.new(size.X/2, 0, 0))
-        local rS, rOn = Camera:WorldToViewportPoint(cf.Position + Vector3.new(size.X/2, 0, 0))
-        if tOn and bOn and lOn and rOn then
-            local w = math.abs(rS.X - lS.X)
-            local h = math.abs(bS.Y - tS.Y)
-            if w > 0 and h > 0 and w < 800 and h < 800 then
-                return {x = lS.X, y = tS.Y, w = w, h = h}
-            end
-        end
-    end
-    local head = char:FindFirstChild("Head")
-    local lLeg = char:FindFirstChild("LeftFoot") or char:FindFirstChild("LeftLowerLeg")
+local function GetScreenBox(char)
+    local head = char:FindFirstChild("Head"); local lLeg = char:FindFirstChild("LeftFoot") or char:FindFirstChild("LeftLowerLeg")
     if head and lLeg then
         local hS, hOn = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
         local fS, fOn = Camera:WorldToViewportPoint(lLeg.Position - Vector3.new(0, 0.5, 0))
-        if hOn and fOn then
-            local h = math.abs(fS.Y - hS.Y)
-            local lSh = char:FindFirstChild("LeftUpperArm")
-            local rSh = char:FindFirstChild("RightUpperArm")
-            local w
-            if lSh and rSh then
-                local lS2 = Camera:WorldToViewportPoint(lSh.Position)
-                local rS2 = Camera:WorldToViewportPoint(rSh.Position)
-                w = math.abs(rS2.X - lS2.X) * 1.6
-            else w = h * 0.5 end
-            if h > 0 and w > 0 then return {x = hS.X - w/2, y = hS.Y, w = w, h = h} end
-        end
+        if hOn and fOn then local h = math.abs(fS.Y - hS.Y); local w = h * 0.5; return {x = hS.X - w/2, y = hS.Y, w = w, h = h} end
     end
     return nil
 end
 
 local function RenderESP()
     if not Config.ESP then
-        for _, d in pairs(ESP) do ForceHide(d) end
-        CH1.Visible = false; CH2.Visible = false
-        FOVCircle.Visible = false
-        return
+        for _, d in pairs(ESP) do ForceHide(d) end; CH1.Visible = false; CH2.Visible = false; FOVCircle.Visible = false; return
     end
-
     if Config.Crosshair then
-        local cx, cy = Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2
-        local sz = Config.CH_Size
+        local cx, cy = Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2; local sz = Config.CH_Size
         CH1.From = Vector2.new(cx-sz, cy); CH1.To = Vector2.new(cx+sz, cy); CH1.Visible = true
         CH2.From = Vector2.new(cx, cy-sz); CH2.To = Vector2.new(cx, cy+sz); CH2.Visible = true
-    else
-        CH1.Visible = false; CH2.Visible = false
-    end
-
-    local myChar = LP.Character
-    local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local myPos = myHrp and myHrp.Position
-    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+    else CH1.Visible = false; CH2.Visible = false end
+    
+    local myChar = LP.Character; local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local myPos = myHrp and myHrp.Position; local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
     local playerAlive = myHum and myHum.Health > 0
-
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LP then
             local d = ESP[p]
             if not playerAlive then if d then ForceHide(d) end else
-                local char = p.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                local head = char and char:FindFirstChild("Head")
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                if not (char and hrp and head and hum and hum.Health > 0 and PassesTeamFilter(p)) then
-                    if d then ForceHide(d) end
-                else
+                local char = p.Character; local hrp = char and char:FindFirstChild("HumanoidRootPart"); local hum = char and char:FindFirstChildOfClass("Humanoid")
+                if not (char and hrp and hum and hum.Health > 0 and PassesTeamFilter(p)) then if d then ForceHide(d) end else
                     local d3 = myPos and (myPos - hrp.Position).Magnitude or 0
                     if d3 > Config.MaxDistance then if d then ForceHide(d) end else
                         local sp, onScreen = Camera:WorldToViewportPoint(hrp.Position)
                         if not d then d = CreateDraw(p); if not d then return end end
-
                         local isEnemy = LP.Team and p.Team and p.Team ~= LP.Team
-                        local color
-                        if LP.Team and p.Team then
-                            color = isEnemy and Color3.fromRGB(255,80,80) or Color3.fromRGB(80,200,255)
-                        else color = DistToColor(d3) end
-
+                        local color = (LP.Team and p.Team) and (isEnemy and Color3.fromRGB(255,80,80) or Color3.fromRGB(80,200,255)) or DistToColor(d3)
                         if not onScreen and Config.ESP_Offscreen then
-                            local arrPos = OffscreenArrowPos(sp, 40)
-                            local dir = (Vector2.new(sp.X, sp.Y) - arrPos).Unit
-                            local perp = Vector2.new(-dir.Y, dir.X)
-                            d.OffArrow.PointA = arrPos + dir*14
-                            d.OffArrow.PointB = arrPos - dir*8 + perp*10
-                            d.OffArrow.PointC = arrPos - dir*8 - perp*10
-                            d.OffArrow.Color = color
-                            d.OffArrow.Visible = true
-                            ForceHide(d)
-                            d.OffArrow.Visible = true
-                        else 
-                            d.OffArrow.Visible = false 
-                            if not onScreen then ForceHide(d) else
-                                local box = GetScreenBox(char, hrp)
-                                local x, y, w, h
-                                if box then x, y, w, h = box.x, box.y, box.w, box.h
-                                else
-                                    h = math.clamp(8000 / math.max(d3, 1), 20, 500)
-                                    w = h / 2
-                                    x = sp.X - w/2
-                                    y = sp.Y - h/2
-                                end
-
-                                d.Box.Visible = Config.ESP_Box
-                                if d.Box.Visible then
-                                    d.Box.Size = Vector2.new(w, h)
-                                    d.Box.Position = Vector2.new(x, y)
-                                    d.Box.Color = color
-                                end
-                                d.Line.Visible = Config.ESP_Line
-                                if d.Line.Visible then
-                                    d.Line.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
-                                    d.Line.To = Vector2.new(sp.X, sp.Y)
-                                    d.Line.Color = color
-                                end
-                                d.Name.Visible = Config.ESP_Name
-                                d.NameBg.Visible = Config.ESP_Name
+                            local arrPos = OffscreenArrowPos(sp, 40); local dir = (Vector2.new(sp.X, sp.Y) - arrPos).Unit; local perp = Vector2.new(-dir.Y, dir.X)
+                            d.OffArrow.PointA = arrPos + dir*14; d.OffArrow.PointB = arrPos - dir*8 + perp*10; d.OffArrow.PointC = arrPos - dir*8 - perp*10
+                            d.OffArrow.Color = color; d.OffArrow.Visible = true; ForceHide(d); d.OffArrow.Visible = true
+                        else d.OffArrow.Visible = false; if not onScreen then ForceHide(d) else
+                                local box = GetScreenBox(char); local x, y, w, h
+                                if box then x, y, w, h = box.x, box.y, box.w, box.h else h = math.clamp(8000 / math.max(d3, 1), 20, 500); w = h / 2; x = sp.X - w/2; y = sp.Y - h/2 end
+                                d.Box.Visible = Config.ESP_Box; if d.Box.Visible then d.Box.Size = Vector2.new(w, h); d.Box.Position = Vector2.new(x, y); d.Box.Color = color end
+                                d.Line.Visible = Config.ESP_Line; if d.Line.Visible then d.Line.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y); d.Line.To = Vector2.new(sp.X, sp.Y); d.Line.Color = color end
+                                d.Name.Visible = Config.ESP_Name; d.NameBg.Visible = Config.ESP_Name
                                 if d.Name.Visible then
-                                    local prefix = ""
-                                    if LP.Team and p.Team then prefix = isEnemy and "[E] " or "[A] " end
-                                    d.Name.Text = prefix..p.Name
-                                    d.Name.Position = Vector2.new(x + w/2, y-18)
-                                    d.Name.Color = color
-                                    local tw = #(prefix..p.Name)*7
-                                    d.NameBg.Size = Vector2.new(tw+12, 18)
-                                    d.NameBg.Position = Vector2.new(x + w/2 - (tw+12)/2, y-19)
+                                    local prefix = (LP.Team and p.Team) and (isEnemy and "[E] " or "[A] ") or ""
+                                    d.Name.Text = prefix..p.Name; d.Name.Position = Vector2.new(x + w/2, y-18); d.Name.Color = color
+                                    local tw = #(prefix..p.Name)*7; d.NameBg.Size = Vector2.new(tw+12, 18); d.NameBg.Position = Vector2.new(x + w/2 - (tw+12)/2, y-19)
                                 end
-                                d.Dist.Visible = Config.ESP_Dist
-                                if d.Dist.Visible then
-                                    d.Dist.Text = tostring(math.floor(d3)).."m"
-                                    d.Dist.Position = Vector2.new(x + w/2, y+h+2)
-                                    d.Dist.Color = color
-                                end
-                                d.HpBg.Visible = Config.ESP_HP
-                                d.HpBar.Visible = Config.ESP_HP
-                                d.HpText.Visible = Config.ESP_HP
+                                d.Dist.Visible = Config.ESP_Dist; if d.Dist.Visible then d.Dist.Text = tostring(math.floor(d3)).."m"; d.Dist.Position = Vector2.new(x + w/2, y+h+2); d.Dist.Color = color end
+                                d.HpBg.Visible = Config.ESP_HP; d.HpBar.Visible = Config.ESP_HP; d.HpText.Visible = Config.ESP_HP
                                 if d.HpBar.Visible and hum.MaxHealth > 0 then
-                                    local hpP = math.clamp(hum.Health/hum.MaxHealth, 0, 1)
-                                    local hpColor = Color3.fromRGB(255 * (1 - hpP), 255 * hpP, 0)
-                                    d.HpBg.Size = Vector2.new(4, h); d.HpBg.Position = Vector2.new(x-8, y)
-                                    d.HpBar.Size = Vector2.new(4, h*hpP); d.HpBar.Position = Vector2.new(x-8, y+h*(1-hpP))
-                                    d.HpBar.Color = hpColor
-                                    d.HpText.Text = tostring(math.floor(hum.Health)) .. "/" .. tostring(math.floor(hum.MaxHealth))
-                                    d.HpText.Position = Vector2.new(x-10, y-15)
-                                    d.HpText.Color = hpColor
+                                    local hpP = math.clamp(hum.Health/hum.MaxHealth, 0, 1); local hpColor = Color3.fromRGB(255 * (1 - hpP), 255 * hpP, 0)
+                                    d.HpBg.Size = Vector2.new(4, h); d.HpBg.Position = Vector2.new(x-8, y); d.HpBar.Size = Vector2.new(4, h*hpP); d.HpBar.Position = Vector2.new(x-8, y+h*(1-hpP)); d.HpBar.Color = hpColor
+                                    d.HpText.Text = tostring(math.floor(hum.Health)); d.HpText.Position = Vector2.new(x-10, y-15); d.HpText.Color = hpColor
                                 end
                                 for i, pair in ipairs(BONE_PAIRS) do
-                                    local a = char:FindFirstChild(pair[1])
-                                    local b = char:FindFirstChild(pair[2])
-                                    local bone = d.Bones[i]
+                                    local a = char:FindFirstChild(pair[1]); local b = char:FindFirstChild(pair[2]); local bone = d.Bones[i]
                                     if Config.ESP_Skeleton and a and b then
-                                        local pa, onA = Camera:WorldToViewportPoint(a.Position)
-                                        local pb, onB = Camera:WorldToViewportPoint(b.Position)
-                                        if onA and onB then
-                                            bone.From = Vector2.new(pa.X, pa.Y)
-                                            bone.To = Vector2.new(pb.X, pb.Y)
-                                            bone.Color = color
-                                            bone.Visible = true
-                                        else bone.Visible = false end
+                                        local pa, onA = Camera:WorldToViewportPoint(a.Position); local pb, onB = Camera:WorldToViewportPoint(b.Position)
+                                        if onA and onB then bone.From = Vector2.new(pa.X, pa.Y); bone.To = Vector2.new(pb.X, pb.Y); bone.Color = color; bone.Visible = true else bone.Visible = false end
                                     else bone.Visible = false end
                                 end
                                 if Config.ESP_DistBar then
                                     local frac = math.clamp(1 - d3/Config.MaxDistance, 0, 1)
-                                    d.DistBarBg.Visible = true
-                                    d.DistBarBg.Size = Vector2.new(w, 3)
-                                    d.DistBarBg.Position = Vector2.new(x, y+h+18)
-                                    d.DistBarBg.Color = Color3.fromRGB(30,30,40)
-                                    d.DistBarFg.Visible = true
-                                    d.DistBarFg.Size = Vector2.new(w*frac, 3)
-                                    d.DistBarFg.Position = Vector2.new(x, y+h+18)
-                                    d.DistBarFg.Color = color
-                                else
-                                    d.DistBarBg.Visible = false
-                                    d.DistBarFg.Visible = false
-                                end
+                                    d.DistBarBg.Visible = true; d.DistBarBg.Size = Vector2.new(w, 3); d.DistBarBg.Position = Vector2.new(x, y+h+18); d.DistBarBg.Color = Color3.fromRGB(30,30,40)
+                                    d.DistBarFg.Visible = true; d.DistBarFg.Size = Vector2.new(w*frac, 3); d.DistBarFg.Position = Vector2.new(x, y+h+18); d.DistBarFg.Color = color
+                                else d.DistBarBg.Visible = false; d.DistBarFg.Visible = false end
                             end
                         end
                     end
@@ -1045,141 +685,66 @@ end
 
 local function CreateVehicleDraw(model)
     if VehicleESP[model] then return VehicleESP[model] end
-    local ok, tbl = pcall(function()
-        return { Box = Drawing.new("Square"), Name = Drawing.new("Text"), Dist = Drawing.new("Text") }
-    end)
-    if not ok or not tbl then return nil end
-    tbl.Box.Thickness = 1
-    tbl.Name.Size = 13; tbl.Name.Center = true; tbl.Name.Outline = true
-    tbl.Dist.Size = 12; tbl.Dist.Center = true; tbl.Dist.Outline = true
+    local tbl = { Box = Drawing.new("Square"), Name = Drawing.new("Text"), Dist = Drawing.new("Text") }
+    tbl.Box.Thickness = 1; tbl.Name.Size = 13; tbl.Name.Center = true; tbl.Name.Outline = true; tbl.Dist.Size = 12; tbl.Dist.Center = true; tbl.Dist.Outline = true
     for _, v in pairs(tbl) do AddDraw(v) end
-    VehicleESP[model] = tbl
-    return tbl
+    VehicleESP[model] = tbl; return tbl
 end
 
 local function RenderVehicleESP()
-    if not Config.V_ESP then
-        for model, d in pairs(VehicleESP) do
-            if d.Box then pcall(function() d.Box.Visible = false end) end
-            if d.Name then pcall(function() d.Name.Visible = false end) end
-            if d.Dist then pcall(function() d.Dist.Visible = false end) end
-        end
-        return
-    end
-    local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
-    local myPos = myHrp and myHrp.Position
-    local alive = {}
+    if not Config.V_ESP then for model, d in pairs(VehicleESP) do if d.Box then pcall(function() d.Box.Visible = false end) end end; return end
+    local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart"); local myPos = myHrp and myHrp.Position; local alive = {}
     for _, model in ipairs(CollectUniqueModels()) do
         if model.Parent then
             local anchor = ModelAnchor(model)
             if anchor then
-                alive[model] = true
-                local d = CreateVehicleDraw(model)
+                alive[model] = true; local d = CreateVehicleDraw(model)
                 if d then
-                    local pos = anchor.Position
-                    local d3 = myPos and (myPos - pos).Magnitude or 0
-                    if d3 > (Config.V_ESP_MaxDist or 5000) then
-                        for _, v in pairs(d) do v.Visible = false end
-                    else
+                    local pos = anchor.Position; local d3 = myPos and (myPos - pos).Magnitude or 0
+                    if d3 > (Config.V_ESP_MaxDist or 5000) then for _, v in pairs(d) do v.Visible = false end else
                         local sp, onScreen = Camera:WorldToViewportPoint(pos)
-                        if not onScreen then
-                            for _, v in pairs(d) do v.Visible = false end
-                        else
-                            local extOk, ext = pcall(function() return model:GetExtentsSize() end)
-                            local w, h
-                            if extOk and ext then
-                                local szSp = Camera:WorldToViewportPoint(pos + ext/2)
-                                w = math.clamp(math.abs(szSp.X - sp.X)*2, 22, 600)
-                                h = math.clamp(math.abs(szSp.Y - sp.Y)*2, 22, 600)
-                            else
-                                local s = math.clamp(8000/math.max(d3,1), 24, 300)
-                                w, h = s, s
-                            end
-                            d.Box.Visible = Config.V_ESP_Box
-                            if d.Box.Visible then
-                                d.Box.Size = Vector2.new(w, h)
-                                d.Box.Position = Vector2.new(sp.X - w/2, sp.Y - h/2)
-                                d.Box.Color = Config.ColorVehicle
-                            end
-                            d.Name.Visible = Config.V_ESP_Name
-                            if d.Name.Visible then
-                                d.Name.Text = model.Name
-                                d.Name.Position = Vector2.new(sp.X, sp.Y - h/2 - 18)
-                                d.Name.Color = Config.ColorVehicle
-                            end
-                            d.Dist.Visible = Config.V_ESP_Dist
-                            if d.Dist.Visible then
-                                d.Dist.Text = tostring(math.floor(d3)).."m"
-                                d.Dist.Position = Vector2.new(sp.X, sp.Y + h/2 + 2)
-                                d.Dist.Color = Config.ColorVehicle
-                            end
+                        if not onScreen then for _, v in pairs(d) do v.Visible = false end else
+                            local extOk, ext = pcall(function() return model:GetExtentsSize() end); local w, h
+                            if extOk and ext then local szSp = Camera:WorldToViewportPoint(pos + ext/2); w = math.clamp(math.abs(szSp.X - sp.X)*2, 22, 600); h = math.clamp(math.abs(szSp.Y - sp.Y)*2, 22, 600)
+                            else local s = math.clamp(8000/math.max(d3,1), 24, 300); w, h = s, s end
+                            d.Box.Visible = Config.V_ESP_Box; if d.Box.Visible then d.Box.Size = Vector2.new(w, h); d.Box.Position = Vector2.new(sp.X - w/2, sp.Y - h/2); d.Box.Color = Config.ColorVehicle end
+                            d.Name.Visible = Config.V_ESP_Name; if d.Name.Visible then d.Name.Text = model.Name; d.Name.Position = Vector2.new(sp.X, sp.Y - h/2 - 18); d.Name.Color = Config.ColorVehicle end
+                            d.Dist.Visible = Config.V_ESP_Dist; if d.Dist.Visible then d.Dist.Text = tostring(math.floor(d3)).."m"; d.Dist.Position = Vector2.new(sp.X, sp.Y + h/2 + 2); d.Dist.Color = Config.ColorVehicle end
                         end
                     end
                 end
             end
         end
     end
-    for model, d in pairs(VehicleESP) do
-        if not alive[model] then
-            for _, v in pairs(d) do pcall(function() v:Remove() end) end
-            VehicleESP[model] = nil
-        end
-    end
+    for model, d in pairs(VehicleESP) do if not alive[model] then for _, v in pairs(d) do pcall(function() v:Remove() end) end; VehicleESP[model] = nil end end
 end
 
--- AI v14 + Silent v3 + Bypass v15
-local LastSwitch = 0
-local SwitchCD = 0.25
-local LockHysteresis = 0
-
-local function IsVisible(head)
-    local rp = RaycastParams.new()
-    rp.FilterDescendantsInstances = {LP.Character, head.Parent}
-    rp.FilterType = Enum.RaycastFilterType.Exclude
-    return WS:Raycast(Camera.CFrame.Position, head.Position - Camera.CFrame.Position, rp) == nil
-end
-
-local function GetFovRadiusPx()
-    return (Camera.ViewportSize.Y / 2) * (Config.FOVPercent / 100)
-end
+-- ═══════════════ AI / SILENT AIM ═══════════════
+local LastSwitch = 0; local SwitchCD = 0.25; local LockHysteresis = 0
+local function IsVisible(head) local rp = RaycastParams.new(); rp.FilterDescendantsInstances = {LP.Character, head.Parent}; rp.FilterType = Enum.RaycastFilterType.Exclude; return WS:Raycast(Camera.CFrame.Position, head.Position - Camera.CFrame.Position, rp) == nil end
+local function GetFovRadiusPx() return (Camera.ViewportSize.Y / 2) * (Config.FOVPercent / 100) end
 
 local function IsStrictlyInFov(head)
-    local sp, on = Camera:WorldToViewportPoint(head.Position)
-    if not on or sp.Z < 0 then return false, 0 end
-    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    local targetPos = Vector2.new(sp.X, sp.Y)
-    local d2 = (targetPos - screenCenter).Magnitude
-    local radius = GetFovRadiusPx()
-    return d2 <= radius, d2
+    local sp, on = Camera:WorldToViewportPoint(head.Position); if not on or sp.Z < 0 then return false, 0 end
+    local d2 = (Vector2.new(sp.X, sp.Y) - Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)).Magnitude
+    return d2 <= GetFovRadiusPx(), d2
 end
 
 local function GetTarget()
-    local myChar = LP.Character
-    local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
+    local myChar = LP.Character; local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart"); local myHum = myChar and myChar:FindFirstChildOfClass("Humanoid")
     if not myHrp or not myHum or myHum.Health <= 0 then return nil, 0 end
-    local myPos = myHrp.Position
-    local best, bestScore = nil, -math.huge
-    local bestDistPx = 0
-    local now = tick()
+    local myPos = myHrp.Position; local best, bestScore = nil, -math.huge; local bestDistPx = 0; local now = tick()
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LP and p.Character and PassesTeamFilter(p) then
-            local head = p.Character:FindFirstChild("Head")
-            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            local head = p.Character:FindFirstChild("Head"); local hum = p.Character:FindFirstChildOfClass("Humanoid"); local hrp = p.Character:FindFirstChild("HumanoidRootPart")
             if head and hum and hrp and hum.Health > 0 then
                 local d3 = (myPos - head.Position).Magnitude
                 if d3 <= Config.MaxDistance then
                     local inFov, distPx = IsStrictlyInFov(head)
                     if inFov then
-                        local hp = hum.MaxHealth > 0 and (hum.Health/hum.MaxHealth) or 1
-                        local visible = (not Config.WallCheck) or IsVisible(head)
-                        local score = 500 - d3
-                        if visible then score = score + 100 end
-                        score = score - (1 - hp) * 50
-                        local look = hrp.CFrame.LookVector
-                        local toMe = (myPos - hrp.Position).Unit
-                        if look:Dot(toMe) > 0.3 then score = score + 500 end
+                        local hp = hum.MaxHealth > 0 and (hum.Health/hum.MaxHealth) or 1; local visible = (not Config.WallCheck) or IsVisible(head)
+                        local score = 500 - d3; if visible then score = score + 100 end; score = score - (1 - hp) * 50
+                        local look = hrp.CFrame.LookVector; local toMe = (myPos - hrp.Position).Unit; if look:Dot(toMe) > 0.3 then score = score + 500 end
                         if now - LastSwitch < SwitchCD and LockHysteresis > 0 then score = score + 50 end
                         if score > bestScore then bestScore = score; best = head; bestDistPx = distPx end
                     end
@@ -1187,112 +752,43 @@ local function GetTarget()
             end
         end
     end
-    if best then LockHysteresis = 1 else LockHysteresis = 0 end
-    return best, bestDistPx
+    if best then LockHysteresis = 1 else LockHysteresis = 0 end; return best, bestDistPx
 end
 
-local SilentLine = Drawing.new("Line")
-SilentLine.Thickness = 1.5
-SilentLine.Color = Config.ColorSilent
-SilentLine.Transparency = 0.8
-AddDraw(SilentLine)
+local SilentLine = Drawing.new("Line"); SilentLine.Thickness = 1.5; SilentLine.Color = Config.ColorSilent; SilentLine.Transparency = 0.8; AddDraw(SilentLine)
+local isShooting = false; local silentTarget = nil; local silentActive = false; local currentDistPx = 0
 
-local isShooting = false
-local silentTarget = nil
-local silentActive = false
-local currentDistPx = 0
-local pendingShots = {}
+AddConn(UIS.InputBegan:Connect(function(inp, gp) if not gp and (inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch) then isShooting = true end end))
+AddConn(UIS.InputEnded:Connect(function(inp, gp) if not gp and (inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch) then isShooting = false end end))
 
-AddConn(UIS.InputBegan:Connect(function(inp, gp)
-    if not gp and (inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch) then 
-        isShooting = true 
-    end
-end))
-AddConn(UIS.InputEnded:Connect(function(inp, gp)
-    if not gp and (inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch) then 
-        isShooting = false 
-    end
-end))
-
-local function GetBypassOffset()
-    if not Config.Bypass then return Vector3.zero end
-    return Vector3.new((math.random() - 0.5) * 0.1, (math.random() - 0.5) * 0.1, (math.random() - 0.5) * 0.1)
-end
+local function GetBypassOffset() if not Config.Bypass then return Vector3.zero end return Vector3.new((math.random() - 0.5) * 0.1, (math.random() - 0.5) * 0.1, (math.random() - 0.5) * 0.1) end
 
 pcall(function()
-    local mt = getrawmetatable(game)
-    local oldNC = mt.__namecall
-    setreadonly(mt, false)
+    local mt = getrawmetatable(game); local oldNC = mt.__namecall; setreadonly(mt, false)
     mt.__namecall = newcclosure(function(self, ...)
         if silentActive and silentTarget and silentTarget.Parent then
-            local m = getnamecallmethod()
-            local offset = GetBypassOffset()
-            if m == "Raycast" then
-                local a = {...}
-                if typeof(a[1]) == "Vector3" then
-                    local tPos = silentTarget.Position + offset
-                    a[2] = tPos - a[1]
-                end
-                return oldNC(self, unpack(a))
-            elseif m == "FindPartOnRay" or m == "FindPartOnRayWithIgnoreList" then
-                local a = {...}
-                if typeof(a[1]) == "Ray" then
-                    local tPos = silentTarget.Position + offset
-                    a[1] = Ray.new(a[1].Origin, tPos - a[1].Origin)
-                end
-                return oldNC(self, unpack(a))
-            end
+            local m = getnamecallmethod(); local offset = GetBypassOffset()
+            if m == "Raycast" then local a = {...}; if typeof(a[1]) == "Vector3" then local tPos = silentTarget.Position + offset; a[2] = tPos - a[1] end; return oldNC(self, unpack(a))
+            elseif m == "FindPartOnRay" or m == "FindPartOnRayWithIgnoreList" then local a = {...}; if typeof(a[1]) == "Ray" then local tPos = silentTarget.Position + offset; a[1] = Ray.new(a[1].Origin, tPos - a[1].Origin) end; return oldNC(self, unpack(a)) end
         end
         return oldNC(self, ...)
     end)
     setreadonly(mt, true)
 end)
 
-local Frames = 0
-local LastFpsUpdate = tick()
-
 local function TickLogic(dt)
-    Frames = Frames + 1
-    local now = tick()
-    if now - LastFpsUpdate >= 1 then Frames = 0; LastFpsUpdate = now end
-
-    for i = #pendingShots, 1, -1 do
-        if tick() >= pendingShots[i].fireAt then table.remove(pendingShots, i) end
-    end
-
     if Config.SilentAim and isShooting then
-        silentTarget, currentDistPx = GetTarget()
-        silentActive = silentTarget ~= nil
-        if silentActive and Config.Bypass and #pendingShots == 0 then
-            local delay = 0.01 + math.random() * 0.03
-            if math.random() < 0.5 then task.wait(0) end
-        end
+        silentTarget, currentDistPx = GetTarget(); silentActive = silentTarget ~= nil
         if silentTarget then
             local sp, on = Camera:WorldToViewportPoint(silentTarget.Position)
-            if on then
-                SilentLine.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-                SilentLine.To = Vector2.new(sp.X, sp.Y)
-                SilentLine.Visible = true
-                SilentLine.Color = Config.ColorSilent
+            if on then SilentLine.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2); SilentLine.To = Vector2.new(sp.X, sp.Y); SilentLine.Visible = true; SilentLine.Color = Config.ColorSilent
             else SilentLine.Visible = false end
-            FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-            FOVCircle.Radius = GetFovRadiusPx()
-            FOVCircle.Visible = Config.ShowFOV
-            FOVCircle.Color = Config.ColorNeon
+            FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2); FOVCircle.Radius = GetFovRadiusPx(); FOVCircle.Visible = Config.ShowFOV; FOVCircle.Color = Config.ColorNeon
         else
             SilentLine.Visible = false
-            if Config.ShowFOV then
-                FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
-                FOVCircle.Radius = GetFovRadiusPx()
-                FOVCircle.Visible = true
-            else FOVCircle.Visible = false end
+            if Config.ShowFOV then FOVCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2); FOVCircle.Radius = GetFovRadiusPx(); FOVCircle.Visible = true else FOVCircle.Visible = false end
         end
-        DebugHUD.Text = string.format("FOV: %.0fpx | Target: %s", GetFovRadiusPx(), silentTarget and "LOCKED" or "none")
-    else
-        silentActive = false; silentTarget = nil
-        SilentLine.Visible = false; FOVCircle.Visible = false
-        DebugHUD.Text = "FOV Debug: off"
-    end
+    else silentActive = false; silentTarget = nil; SilentLine.Visible = false; FOVCircle.Visible = false end
 end
 
 local function ApplyHitbox()
@@ -1300,18 +796,19 @@ local function ApplyHitbox()
     for _, p in pairs(Players:GetPlayers()) do
         if p ~= LP and p.Character then
             local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                hrp.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize)
-                hrp.Transparency = 0.7
-                hrp.CanCollide = false
-            end
+            if hrp then hrp.Size = Vector3.new(Config.HitboxSize, Config.HitboxSize, Config.HitboxSize); hrp.Transparency = 0.7; hrp.CanCollide = false end
         end
     end
 end
 
 RunService:BindToRenderStep("MeowESP", Enum.RenderPriority.Camera.Value + 1, RenderESP)
 RunService:BindToRenderStep("MeowESP2", Enum.RenderPriority.Camera.Value + 2, RenderVehicleESP)
-RunService:BindToRenderStep("MeowLogic", Enum.RenderPriority.Camera.Value + 3, function(dt)
-    TickLogic(dt)
-    ApplyHitbox()
-end)
+RunService:BindToRenderStep("MeowLogic", Enum.RenderPriority.Camera.Value + 3, function(dt) TickLogic(dt); ApplyHitbox() end)
+
+getgenv().MeowModUnload = function()
+    for _, c in pairs(Connections) do if typeof(c) == "RBXScriptConnection" then c:Disconnect() end end
+    for _, d in pairs(Drawings) do pcall(function() d:Remove() end) end
+    for _, p in pairs(Players:GetPlayers()) do local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart"); if hrp then hrp.Size = Vector3.new(2,2,1); hrp.Transparency = 1; hrp.CanCollide = true end end
+    pcall(function() RunService:UnbindFromRenderStep("MeowESP"); RunService:UnbindFromRenderStep("MeowESP2"); RunService:UnbindFromRenderStep("MeowLogic") end)
+    if ScreenGui then ScreenGui:Destroy() end
+end
