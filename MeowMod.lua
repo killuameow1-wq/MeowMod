@@ -1,40 +1,23 @@
--- // MEOWMOD | V4.2 | HERMETIC UNLOAD + SMOOTH AIM + HITMARKER
--- Полная сборка. Всё внутри. Unload закрывает ВСЁ: хук, соединения, drawings, hitbox, Rayfield.
--- Guard от повторной загрузки. Smooth aim через RenderStepped Lerp.
+-- // MEOWMOD | V4.3 | STABLE ESP + HERMETIC UNLOAD + FULL BUILD
+-- ESP переписан: head+feet+shoulders, без кэша, без GetBoundingBox.
+-- Все функции v3 внутри. Rayfield. Smooth aim. Hitmarker. Vehicle ESP. TP.
+-- Unload закрывает ВСЁ. Guard от двойной загрузки.
 
--- ─── ГАРД: сначала полный unload предыдущей версии ───
-if getgenv().MeowModUnload then
-    pcall(getgenv().MeowModUnload)
-    task.wait(0.05)
-end
+if getgenv().MeowModUnload then pcall(getgenv().MeowModUnload); task.wait(0.05) end
 getgenv().MeowModUnloaded = false
 
 local Players    = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS        = game:GetService("UserInputService")
 local WS         = game:GetService("Workspace")
-local CollSvc    = game:GetService("CollectionService")
 
 local LP     = Players.LocalPlayer
 local Camera = WS.CurrentCamera
 
--- ═══════════════ РЕЕСТРЫ ДЛЯ UNLOAD ═══════════════
-local Connections = {}
-local Drawings    = {}
-local RenderHooks = {}
-
-local function TrackConn(c)
-    table.insert(Connections, c)
-    return c
-end
-local function TrackDraw(d)
-    table.insert(Drawings, d)
-    return d
-end
-local function TrackRender(name, fn)
-    table.insert(RenderHooks, { name = name, fn = fn })
-    return name
-end
+-- ═══════════════ РЕЕСТРЫ ═══════════════
+local Connections, Drawings = {}, {}
+local function TrackConn(c) table.insert(Connections, c); return c end
+local function TrackDraw(d) table.insert(Drawings, d); return d end
 
 -- ═══════════════ RAYFIELD ═══════════════
 local Rayfield
@@ -42,24 +25,21 @@ do
     local ok, res = pcall(function()
         return loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
     end)
-    if not ok or not res then
-        return warn("[MeowMod] Rayfield failed to load — aborting")
-    end
+    if not ok or not res then return warn("[MeowMod] Rayfield load failed") end
     Rayfield = res
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "MeowMod V4.2",
+    Name = "MeowMod V4.3",
     LoadingTitle = "MeowMod",
-    LoadingSubtitle = "hermetic",
-    ConfigurationSaving = { Enabled = true, FolderName = "MeowMod", FileName = "v4_2" },
+    LoadingSubtitle = "stable esp",
+    ConfigurationSaving = { Enabled = true, FolderName = "MeowMod", FileName = "v4_3" },
     KeySystem = false,
 })
 
 -- ═══════════════ CONFIG ═══════════════
 local C = {
     Silent        = false,
-    StrictFOV     = true,
     FOVPercent    = 25,
     MaxDist       = 5000,
     Headshot      = true,
@@ -109,7 +89,7 @@ local function inTeam(p)
     local my = LP.Team
     if not my then return true end
     if C.TeamFilter == "enemy" then return p.Team ~= my end
-    if C.TeamFilter == "my"    then return p.Team == my end
+    if C.TeamFilter == "my" then return p.Team == my end
     return true
 end
 
@@ -165,7 +145,8 @@ local function InFov(head)
     if not on or sp.Z < 0 then return false, math.huge end
     local cx, cy = Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.5
     local dx, dy = sp.X - cx, sp.Y - cy
-    return math.sqrt(dx * dx + dy * dy) <= FovPx(), math.sqrt(dx * dx + dy * dy)
+    local d = math.sqrt(dx * dx + dy * dy)
+    return d <= FovPx(), d
 end
 
 local function Visible(head)
@@ -248,11 +229,7 @@ local function PickTarget()
     return best
 end
 
--- ─── namecall hook (с сохранением для unload) ───
-local hookMT = nil
-local oldNamecall = nil
-local hookInstalled = false
-
+local hookMT, oldNamecall, hookInstalled = nil, nil, false
 local function installHook()
     if hookInstalled then return end
     local mt = getrawmetatable(game)
@@ -290,9 +267,7 @@ local function removeHook()
         hookMT.__namecall = oldNamecall
         setreadonly(hookMT, true)
     end)
-    hookMT = nil
-    oldNamecall = nil
-    hookInstalled = false
+    hookMT = nil; oldNamecall = nil; hookInstalled = false
 end
 installHook()
 
@@ -309,18 +284,15 @@ end))
 
 local function UpdateAim(dt)
     if not C.Silent or not isShooting then
-        silentTarget = nil
-        aimSmoothPos = nil
-        SilentLine.Visible = false
-        FOVCircle.Visible = false
+        silentTarget = nil; aimSmoothPos = nil
+        SilentLine.Visible = false; FOVCircle.Visible = false
         return
     end
     local head = PickTarget()
     if not head then
         aimSmoothPos = nil
         SilentLine.Visible = false
-    end
-    if head then
+    else
         local raw = Predict(head)
         if C.Smoothing > 0 then
             local f = math.clamp(1 - C.Smoothing * dt * 10, 0, 1)
@@ -331,7 +303,7 @@ local function UpdateAim(dt)
         local sp, on = Camera:WorldToViewportPoint(aimSmoothPos)
         if on then
             SilentLine.From = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.5)
-            SilentLine.To   = Vector2.new(sp.X, sp.Y)
+            SilentLine.To = Vector2.new(sp.X, sp.Y)
             SilentLine.Color = C.ColAim
             SilentLine.Visible = true
         else SilentLine.Visible = false end
@@ -341,8 +313,9 @@ local function UpdateAim(dt)
     FOVCircle.Visible = true
 end
 
--- ═══════════════ ESP ═══════════════
+-- ═══════════════ ESP v4.3 (стабильный) ═══════════════
 local ESP = {}
+
 local BONE_PAIRS = {
     {"Head","UpperTorso"},{"UpperTorso","LowerTorso"},
     {"UpperTorso","LeftUpperArm"},{"LeftUpperArm","LeftLowerArm"},{"LeftLowerArm","LeftHand"},
@@ -353,11 +326,13 @@ local BONE_PAIRS = {
 
 local function hideESP(d)
     if not d then return end
-    for _, k in ipairs({"Box","NameBg","Name","Dist","HpBg","HpBar","HpText","Line","OffArrow","DistBarBg","DistBarFg"}) do
-        if d[k] then pcall(function() d[k].Visible = false end) end
+    local names = {"Box","NameBg","Name","Dist","HpBg","HpBar","HpText","Line","OffArrow","DistBarBg","DistBarFg"}
+    for i = 1, #names do
+        local obj = d[names[i]]
+        if obj then pcall(function() obj.Visible = false end) end
     end
     if d.Bones then
-        for _, b in ipairs(d.Bones) do pcall(function() b.Visible = false end) end
+        for i = 1, #d.Bones do pcall(function() d.Bones[i].Visible = false end) end
     end
 end
 
@@ -376,7 +351,6 @@ local function makeESP(p)
         DistBarBg = TrackDraw(Drawing.new("Square")),
         DistBarFg = TrackDraw(Drawing.new("Square")),
         Bones = {},
-        _cache = { char = nil, hum = nil, hrp = nil, head = nil, t = 0 },
     }
     d.Box.Thickness = 1
     d.NameBg.Filled = true; d.NameBg.Color = Color3.fromRGB(10,10,14); d.NameBg.Transparency = 0.6
@@ -402,7 +376,7 @@ local function dropESP(p)
     for k, v in pairs(d) do
         if k == "Bones" then
             for _, b in ipairs(v) do pcall(function() b:Remove() end) end
-        elseif k ~= "_cache" then
+        else
             pcall(function() v:Remove() end)
         end
     end
@@ -411,17 +385,29 @@ end
 TrackConn(Players.PlayerRemoving:Connect(dropESP))
 
 local function boxOf(char)
-    local ok, cf, size = pcall(function() return char:GetBoundingBox() end)
-    if not ok or not cf or not size then return nil end
-    local t, tOn = Camera:WorldToViewportPoint(cf.Position + Vector3.new(0, size.Y/2, 0))
-    local b, bOn = Camera:WorldToViewportPoint(cf.Position - Vector3.new(0, size.Y/2, 0))
-    local l, lOn = Camera:WorldToViewportPoint(cf.Position - Vector3.new(size.X/2, 0, 0))
-    local r, rOn = Camera:WorldToViewportPoint(cf.Position + Vector3.new(size.X/2, 0, 0))
-    if not (tOn and bOn and lOn and rOn) then return nil end
-    local w = math.abs(r.X - l.X)
-    local h = math.abs(b.Y - t.Y)
-    if w <= 0 or h <= 0 or w > 900 or h > 900 then return nil end
-    return { x = l.X, y = t.Y, w = w, h = h }
+    local head = char:FindFirstChild("Head")
+    if not head then return nil end
+    local feet = char:FindFirstChild("LeftFoot") or char:FindFirstChild("LeftLowerLeg")
+        or char:FindFirstChild("LeftUpperLeg") or char:FindFirstChild("LowerTorso")
+    if not feet then return nil end
+    local lSh = char:FindFirstChild("LeftUpperArm")
+    local rSh = char:FindFirstChild("RightUpperArm")
+
+    local hS, hOn = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+    local fS, fOn = Camera:WorldToViewportPoint(feet.Position - Vector3.new(0, 0.5, 0))
+    if not (hOn and fOn) then return nil end
+    local h = fS.Y - hS.Y
+    if h <= 0 then return nil end
+    local w
+    if lSh and rSh then
+        local lS = Camera:WorldToViewportPoint(lSh.Position)
+        local rS = Camera:WorldToViewportPoint(rSh.Position)
+        w = math.abs(rS.X - lS.X) * 1.8
+    else
+        w = h * 0.55
+    end
+    if w <= 0 or w > 1000 or h > 1000 then return nil end
+    return { x = hS.X - w * 0.5, y = hS.Y, w = w, h = h }
 end
 
 local function offscreenPos(sp, margin)
@@ -442,129 +428,139 @@ local function UpdateESP()
     end
     local myChar = LP.Character
     local myHrp  = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local myHum  = myChar and myChar:FindFirstChildOfClass("Humanoid")
     local myPos  = myHrp and myHrp.Position
-    local now = tick()
+    local myAlive = myHum and myHum.Health > 0
+
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LP then
             local d = ESP[p] or makeESP(p)
-            local cache = d._cache
-            if now - cache.t > 0.25 or not cache.char or not cache.char.Parent then
-                cache.char = p.Character
-                cache.hrp = cache.char and cache.char:FindFirstChild("HumanoidRootPart")
-                cache.hum = cache.char and cache.char:FindFirstChildOfClass("Humanoid")
-                cache.head = cache.char and cache.char:FindFirstChild("Head")
-                cache.t = now
-            end
-            local char, hrp, hum, head = cache.char, cache.hrp, cache.hum, cache.head
-            if not (hrp and hum and head and hum.Health > 0 and inTeam(p)) then
-                hideESP(d); continue
-            end
-            local dist = myPos and (myPos - hrp.Position).Magnitude or 0
-            if dist > C.ESP_MaxDist then hideESP(d); continue end
-            local sp, on = Camera:WorldToViewportPoint(hrp.Position)
-            local col = (LP.Team and p.Team) and (p.Team == LP.Team and C.ColAlly or C.ColEnemy) or Color3.fromRGB(255,255,255)
-            if not on and C.ESP_Offscr then
-                local ap = offscreenPos(sp, 40)
-                local dir = (Vector2.new(sp.X, sp.Y) - ap).Unit
-                local perp = Vector2.new(-dir.Y, dir.X)
-                d.OffArrow.PointA = ap + dir * 14
-                d.OffArrow.PointB = ap - dir * 8 + perp * 10
-                d.OffArrow.PointC = ap - dir * 8 - perp * 10
-                d.OffArrow.Color = col
-                d.OffArrow.Visible = true
-                d.Box.Visible = false; d.Line.Visible = false
-                d.Name.Visible = false; d.NameBg.Visible = false
-                d.Dist.Visible = false; d.HpBg.Visible = false
-                d.HpBar.Visible = false; d.HpText.Visible = false
-                d.DistBarBg.Visible = false; d.DistBarFg.Visible = false
-                for _, b in ipairs(d.Bones) do b.Visible = false end
-                continue
-            else d.OffArrow.Visible = false end
-            if not on then hideESP(d); continue end
-            local box = boxOf(char)
-            local x, y, w, h
-            if box then x, y, w, h = box.x, box.y, box.w, box.h
+            local char = p.Character
+            local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+            local hum  = char and char:FindFirstChildOfClass("Humanoid")
+            local head = char and char:FindFirstChild("Head")
+
+            if not (myAlive and char and hrp and hum and head and hum.Health > 0 and inTeam(p)) then
+                hideESP(d)
             else
-                h = math.clamp(8000 / math.max(dist, 1), 20, 500)
-                w = h * 0.5
-                x = sp.X - w * 0.5; y = sp.Y - h * 0.5
-            end
-            d.Box.Visible = C.ESP_Box
-            if C.ESP_Box then
-                d.Box.Size = Vector2.new(w, h)
-                d.Box.Position = Vector2.new(x, y)
-                d.Box.Color = col
-            end
-            d.Line.Visible = C.ESP_Line
-            if C.ESP_Line then
-                d.Line.From = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y)
-                d.Line.To = Vector2.new(sp.X, sp.Y)
-                d.Line.Color = col
-            end
-            d.Name.Visible = C.ESP_Name
-            d.NameBg.Visible = C.ESP_Name
-            if C.ESP_Name then
-                d.Name.Text = p.Name
-                d.Name.Position = Vector2.new(x + w * 0.5, y - 18)
-                d.Name.Color = col
-                local tw = #p.Name * 7 + 12
-                d.NameBg.Size = Vector2.new(tw, 18)
-                d.NameBg.Position = Vector2.new(x + w * 0.5 - tw * 0.5, y - 19)
-            end
-            d.Dist.Visible = C.ESP_Dist
-            if C.ESP_Dist then
-                d.Dist.Text = tostring(math.floor(dist)) .. "m"
-                d.Dist.Position = Vector2.new(x + w * 0.5, y + h + 2)
-                d.Dist.Color = col
-            end
-            d.HpBg.Visible = C.ESP_HP
-            d.HpBar.Visible = C.ESP_HP
-            d.HpText.Visible = C.ESP_HP and C.ESP_HPText
-            if C.ESP_HP and hum.MaxHealth > 0 then
-                local hp = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
-                local hpc = Color3.fromRGB(255 * (1 - hp), 255 * hp, 0)
-                d.HpBg.Size = Vector2.new(4, h)
-                d.HpBg.Position = Vector2.new(x - 8, y)
-                d.HpBar.Size = Vector2.new(4, h * hp)
-                d.HpBar.Position = Vector2.new(x - 8, y + h * (1 - hp))
-                d.HpBar.Color = hpc
-                if C.ESP_HPText then
-                    d.HpText.Text = string.format("%d", math.floor(hum.Health))
-                    d.HpText.Position = Vector2.new(x - 10, y - 15)
-                    d.HpText.Color = hpc
+                local dist = (myPos - hrp.Position).Magnitude
+                if dist > C.ESP_MaxDist then
+                    hideESP(d)
+                else
+                    local sp, on = Camera:WorldToViewportPoint(hrp.Position)
+                    local col = (LP.Team and p.Team)
+                        and (p.Team == LP.Team and C.ColAlly or C.ColEnemy)
+                        or Color3.fromRGB(255, 255, 255)
+                    if not on and C.ESP_Offscr then
+                        local ap = offscreenPos(sp, 40)
+                        local dir = (Vector2.new(sp.X, sp.Y) - ap).Unit
+                        local perp = Vector2.new(-dir.Y, dir.X)
+                        d.OffArrow.PointA = ap + dir * 14
+                        d.OffArrow.PointB = ap - dir * 8 + perp * 10
+                        d.OffArrow.PointC = ap - dir * 8 - perp * 10
+                        d.OffArrow.Color = col
+                        d.OffArrow.Visible = true
+                        d.Box.Visible = false; d.Line.Visible = false
+                        d.Name.Visible = false; d.NameBg.Visible = false
+                        d.Dist.Visible = false; d.HpBg.Visible = false
+                        d.HpBar.Visible = false; d.HpText.Visible = false
+                        d.DistBarBg.Visible = false; d.DistBarFg.Visible = false
+                        for i = 1, #d.Bones do d.Bones[i].Visible = false end
+                    else
+                        d.OffArrow.Visible = false
+                        if not on then
+                            hideESP(d)
+                        else
+                            local box = boxOf(char)
+                            local x, y, w, h
+                            if box then
+                                x, y, w, h = box.x, box.y, box.w, box.h
+                            else
+                                h = math.clamp(8000 / math.max(dist, 1), 20, 500)
+                                w = h * 0.5
+                                x = sp.X - w * 0.5
+                                y = sp.Y - h * 0.5
+                            end
+                            d.Box.Visible = C.ESP_Box
+                            if C.ESP_Box then
+                                d.Box.Size = Vector2.new(w, h)
+                                d.Box.Position = Vector2.new(x, y)
+                                d.Box.Color = col
+                            end
+                            d.Line.Visible = C.ESP_Line
+                            if C.ESP_Line then
+                                d.Line.From = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y)
+                                d.Line.To = Vector2.new(sp.X, sp.Y)
+                                d.Line.Color = col
+                            end
+                            d.Name.Visible = C.ESP_Name
+                            d.NameBg.Visible = C.ESP_Name
+                            if C.ESP_Name then
+                                d.Name.Text = p.Name
+                                d.Name.Position = Vector2.new(x + w * 0.5, y - 18)
+                                d.Name.Color = col
+                                local tw = #p.Name * 7 + 12
+                                d.NameBg.Size = Vector2.new(tw, 18)
+                                d.NameBg.Position = Vector2.new(x + w * 0.5 - tw * 0.5, y - 19)
+                            end
+                            d.Dist.Visible = C.ESP_Dist
+                            if C.ESP_Dist then
+                                d.Dist.Text = tostring(math.floor(dist)) .. "m"
+                                d.Dist.Position = Vector2.new(x + w * 0.5, y + h + 2)
+                                d.Dist.Color = col
+                            end
+                            d.HpBg.Visible = C.ESP_HP
+                            d.HpBar.Visible = C.ESP_HP
+                            d.HpText.Visible = C.ESP_HP and C.ESP_HPText
+                            if C.ESP_HP and hum.MaxHealth > 0 then
+                                local hp = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+                                local hpc = Color3.fromRGB(255 * (1 - hp), 255 * hp, 0)
+                                d.HpBg.Size = Vector2.new(4, h)
+                                d.HpBg.Position = Vector2.new(x - 8, y)
+                                d.HpBar.Size = Vector2.new(4, h * hp)
+                                d.HpBar.Position = Vector2.new(x - 8, y + h * (1 - hp))
+                                d.HpBar.Color = hpc
+                                if C.ESP_HPText then
+                                    d.HpText.Text = string.format("%d", math.floor(hum.Health))
+                                    d.HpText.Position = Vector2.new(x - 10, y - 15)
+                                    d.HpText.Color = hpc
+                                end
+                            end
+                            if C.ESP_DistBar then
+                                local frac = math.clamp(1 - dist / C.ESP_MaxDist, 0, 1)
+                                d.DistBarBg.Visible = true
+                                d.DistBarBg.Size = Vector2.new(w, 3)
+                                d.DistBarBg.Position = Vector2.new(x, y + h + 18)
+                                d.DistBarFg.Visible = true
+                                d.DistBarFg.Size = Vector2.new(w * frac, 3)
+                                d.DistBarFg.Position = Vector2.new(x, y + h + 18)
+                                d.DistBarFg.Color = col
+                            else
+                                d.DistBarBg.Visible = false
+                                d.DistBarFg.Visible = false
+                            end
+                            if C.ESP_Skel then
+                                for i, pair in ipairs(BONE_PAIRS) do
+                                    local a = char:FindFirstChild(pair[1])
+                                    local b = char:FindFirstChild(pair[2])
+                                    local l = d.Bones[i]
+                                    if a and b then
+                                        local pa, onA = Camera:WorldToViewportPoint(a.Position)
+                                        local pb, onB = Camera:WorldToViewportPoint(b.Position)
+                                        if onA and onB then
+                                            l.From = Vector2.new(pa.X, pa.Y)
+                                            l.To = Vector2.new(pb.X, pb.Y)
+                                            l.Color = col
+                                            l.Visible = true
+                                        else l.Visible = false end
+                                    else l.Visible = false end
+                                end
+                            else
+                                for i = 1, #d.Bones do d.Bones[i].Visible = false end
+                            end
+                        end
+                    end
                 end
-            end
-            if C.ESP_DistBar then
-                local frac = math.clamp(1 - dist / C.ESP_MaxDist, 0, 1)
-                d.DistBarBg.Visible = true
-                d.DistBarBg.Size = Vector2.new(w, 3)
-                d.DistBarBg.Position = Vector2.new(x, y + h + 18)
-                d.DistBarFg.Visible = true
-                d.DistBarFg.Size = Vector2.new(w * frac, 3)
-                d.DistBarFg.Position = Vector2.new(x, y + h + 18)
-                d.DistBarFg.Color = col
-            else
-                d.DistBarBg.Visible = false
-                d.DistBarFg.Visible = false
-            end
-            if C.ESP_Skel then
-                for i, pair in ipairs(BONE_PAIRS) do
-                    local a = char:FindFirstChild(pair[1])
-                    local b = char:FindFirstChild(pair[2])
-                    local l = d.Bones[i]
-                    if a and b then
-                        local pa, onA = Camera:WorldToViewportPoint(a.Position)
-                        local pb, onB = Camera:WorldToViewportPoint(b.Position)
-                        if onA and onB then
-                            l.From = Vector2.new(pa.X, pa.Y)
-                            l.To = Vector2.new(pb.X, pb.Y)
-                            l.Color = col
-                            l.Visible = true
-                        else l.Visible = false end
-                    else l.Visible = false end
-                end
-            else
-                for _, l in ipairs(d.Bones) do l.Visible = false end
             end
         end
     end
@@ -665,7 +661,7 @@ local function UpdateVehicleESP()
     end
 end
 
--- ═══════════════ HITBOX EXPANDER ═══════════════
+-- ═══════════════ HITBOX ═══════════════
 local function ApplyHitbox()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LP and p.Character and inTeam(p) then
@@ -719,7 +715,6 @@ local function FlashHitmarker()
     hitmarkerUntil = tick() + 0.15
 end
 
--- ─── hitmarker hook: слушаем Humanoid.Health в чужих персонажах ───
 TrackConn(WS.DescendantAdded:Connect(function(inst)
     if inst:IsA("Humanoid") then
         local char = inst.Parent
@@ -733,7 +728,7 @@ TrackConn(WS.DescendantAdded:Connect(function(inst)
     end
 end))
 
--- ═══════════════ TP FUNCTIONS ═══════════════
+-- ═══════════════ TP ═══════════════
 local function TPBase()
     local myTeam = LP.Team and LP.Team.Name:lower() or ""
     local myColor = LP.TeamColor and LP.TeamColor.Color
@@ -911,7 +906,7 @@ Settings:CreateButton({ Name = "Full Unload", Callback = function()
 end })
 
 -- ═══════════════ RENDER LOOP ═══════════════
-local renderConn = RunService.RenderStepped:Connect(function(dt)
+TrackConn(RunService.RenderStepped:Connect(function(dt)
     if getgenv().MeowModUnloaded then return end
     UpdateAim(dt)
     UpdateESP()
@@ -919,24 +914,20 @@ local renderConn = RunService.RenderStepped:Connect(function(dt)
     UpdateCrosshair()
     if Hitmarker.Visible and tick() > hitmarkerUntil then Hitmarker.Visible = false end
     if C.HitboxExp then ApplyHitbox() end
-end)
-TrackConn(renderConn)
+end))
 
 -- ═══════════════ FULL UNLOAD ═══════════════
 getgenv().MeowModUnload = function()
     if getgenv().MeowModUnloaded then return end
     getgenv().MeowModUnloaded = true
 
-    -- 1. Снять namecall hook
     removeHook()
 
-    -- 2. Отключить все соединения
     for _, c in ipairs(Connections) do
         pcall(function() if typeof(c) == "RBXScriptConnection" then c:Disconnect() end end)
     end
     Connections = {}
 
-    -- 3. Убить все Drawing
     for _, d in ipairs(Drawings) do
         pcall(function() d:Remove() end)
     end
@@ -945,7 +936,6 @@ getgenv().MeowModUnload = function()
     VehicleESP = {}
     VehicleSeats = {}
 
-    -- 4. Сбросить hitbox у всех персонажей
     for _, p in ipairs(Players:GetPlayers()) do
         local hrp = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
@@ -957,15 +947,11 @@ getgenv().MeowModUnload = function()
         end
     end
 
-    -- 5. Обнулить цель
     silentTarget = nil
     aimSmoothPos = nil
     isShooting = false
 
-    -- 6. Убить Rayfield
     pcall(function() Rayfield:Destroy() end)
-
-    -- 7. Зачистить глобал
     pcall(function()
         getgenv().MeowModUnload = nil
         getgenv().MeowModUnloaded = nil
@@ -973,7 +959,7 @@ getgenv().MeowModUnload = function()
 end
 
 Rayfield:Notify({
-    Title = "MeowMod V4.2",
-    Content = "Hermetic load. Full unload ready.",
+    Title = "MeowMod V4.3",
+    Content = "Stable ESP loaded. All players visible.",
     Duration = 5,
 })
