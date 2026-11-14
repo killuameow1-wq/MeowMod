@@ -1,11 +1,9 @@
--- // MEOWMOD | V4.5 | SILENT AIM FIXED + FOV LAG FIXED
--- Главные правки:
--- 1. Хук ловит Camera:ViewportPointToRay / ScreenPointToRay / Mouse.Hit (то, чем реально
---    целятся оружия), не только WS.Raycast.
--- 2. _internalRaycast flag — Visible() не зацикливает хук.
--- 3. PickTarget: если цель жива и в FOV — не переискиваем, работу режет.
--- 4. RandomOffset кэшируется на цикл выстрела, не на каждый рейкаст.
--- 5. FOV circle Radius пишется только при смене C.FOVPercent.
+-- // MEOWMOD | V4.6 | NO-CRASH SILENT (ViewportPointToRay only)
+-- Убран Workspace:Raycast хук — сервер реджектил и кикал.
+-- Оставлен только Camera:ViewportPointToRay / ScreenPointToRay — реальный путь
+-- клиентского прицела. Всё в pcall. Reset isShooting на respawn.
+-- При вылете игры старый unload вызывается через getgenv() — но при hard-kick
+-- глобалы теряются, поэтому запуск скрипта чист.
 
 if getgenv().MeowModUnload then pcall(getgenv().MeowModUnload); task.wait(0.05) end
 getgenv().MeowModUnloaded = false
@@ -34,10 +32,10 @@ do
 end
 
 local Window = Rayfield:CreateWindow({
-    Name = "MeowMod V4.5",
+    Name = "MeowMod V4.6",
     LoadingTitle = "MeowMod",
-    LoadingSubtitle = "silent fixed",
-    ConfigurationSaving = { Enabled = true, FolderName = "MeowMod", FileName = "v4_5" },
+    LoadingSubtitle = "no-crash",
+    ConfigurationSaving = { Enabled = true, FolderName = "MeowMod", FileName = "v4_6" },
     KeySystem = false,
 })
 
@@ -54,8 +52,6 @@ local C = {
     PriorityMode  = "distance",
     Bypass        = true,
     BypassSpread  = 0.08,
-    HookViewportRay = true,
-    HookWorkspaceRay = true,
     ESP           = false,
     ESP_Box       = true,
     ESP_Name      = true,
@@ -139,8 +135,6 @@ local silentTarget = nil
 local aimSmoothPos = nil
 local lastSwitch = 0
 local SWITCH_CD = 0.2
-
--- Кэш оффсета на цикл выстрела (не на каждый Raycast)
 local shotOffset = Vector3.zero
 local _internalRaycast = false
 
@@ -157,7 +151,6 @@ local function InFov(head)
     return d <= FovPx(), d
 end
 
--- Visible с внутренним флагом — не зацикливаем хук
 local function Visible(head)
     _internalRaycast = true
     local rp = RaycastParams.new()
@@ -192,7 +185,6 @@ local function NewShotOffset()
     )
 end
 
--- Возвращает точку, куда целимся сейчас (для хуков)
 local function CurrentAimPoint()
     if not silentTarget or not silentTarget.Parent then return nil end
     local head = silentTarget:FindFirstChild("Head")
@@ -216,7 +208,6 @@ local function ScoreTarget(p, head, hum, hrp, d3, distPx, vis)
     return score
 end
 
--- Проверка: жива ли текущая цель и в FOV. Если да — не переискиваем.
 local function targetValid()
     if not silentTarget or not silentTarget.Parent then return false end
     local head = silentTarget:FindFirstChild("Head")
@@ -228,11 +219,9 @@ local function targetValid()
     local myHrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
     if not myHrp then return false end
     if (myHrp.Position - head.Position).Magnitude > C.MaxDist then return false end
-    local ok = InFov(head)
-    return ok
+    return InFov(head)
 end
 
--- Кэш цели 20Hz, но если цель жива и в FOV — не гоняем цикл
 local pickCache = { head = nil, t = 0 }
 local PICK_INTERVAL = 0.05
 
@@ -242,14 +231,11 @@ local function PickTarget()
         return pickCache.head
     end
     pickCache.t = now
-
-    -- Проверяем текущую цель без полного перебора
     if targetValid() then
         local head = silentTarget:FindFirstChild("Head")
         pickCache.head = head
         return head
     end
-
     local myChar = LP.Character
     local myHrp  = myChar and myChar:FindFirstChild("HumanoidRootPart")
     local myHum  = myChar and myChar:FindFirstChildOfClass("Humanoid")
@@ -287,9 +273,8 @@ local function PickTarget()
     return best
 end
 
--- ═══════════════ ХУКИ ═══════════════
+-- ═══════════════ ХУК: только Camera:ViewportPointToRay / ScreenPointToRay ═══════════════
 local hookMT, oldNamecall, hookInstalled = nil, nil, false
-local camMTOld, camHookInstalled = nil, false
 
 local function installNamecallHook()
     if hookInstalled then return end
@@ -297,38 +282,21 @@ local function installNamecallHook()
     oldNamecall = mt.__namecall
     setreadonly(mt, false)
     mt.__namecall = newcclosure(function(self, ...)
-        if getgenv().MeowModUnloaded or _internalRaycast then return oldNamecall(self, ...) end
-        if not isShooting or not silentTarget or not silentTarget.Parent then
-            return oldNamecall(self, ...)
-        end
-        local method = getnamecallmethod()
-        local aimPoint = CurrentAimPoint()
-        if not aimPoint then return oldNamecall(self, ...) end
-
-        -- Raycast / FindPartOnRay на Workspace
-        if C.HookWorkspaceRay and self == WS then
-            if method == "Raycast" then
-                local a = {...}
-                if typeof(a[1]) == "Vector3" and typeof(a[2]) == "Vector3" then
-                    a[2] = aimPoint - a[1]
-                end
-                return oldNamecall(self, unpack(a))
-            elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" then
-                local a = {...}
-                if typeof(a[1]) == "Ray" then
-                    a[1] = Ray.new(a[1].Origin, aimPoint - a[1].Origin)
-                end
-                return oldNamecall(self, unpack(a))
-            end
-        end
-
-        -- ViewportPointToRay / ScreenPointToRay на Camera — то, чем реально целятся
-        if C.HookViewportRay and self == Camera then
-            if method == "ViewportPointToRay" or method == "ScreenPointToRay" then
-                return Ray.new(Camera.CFrame.Position, aimPoint - Camera.CFrame.Position)
-            end
-        end
-
+        -- Никогда не трогаем ничего вне Camera + isShooting + живая цель
+        local ok, result = pcall(function()
+            if getgenv().MeowModUnloaded or _internalRaycast then return false end
+            if not isShooting or not silentTarget or not silentTarget.Parent then return false end
+            if self ~= Camera then return false end
+            local method = getnamecallmethod()
+            if method ~= "ViewportPointToRay" and method ~= "ScreenPointToRay" then return false end
+            local aimPoint = CurrentAimPoint()
+            if not aimPoint then return false end
+            local camPos = Camera.CFrame.Position
+            local dir = aimPoint - camPos
+            if dir.Magnitude < 0.001 then return false end
+            return Ray.new(camPos, dir.Unit * dir.Magnitude)
+        end)
+        if ok and result then return result end
         return oldNamecall(self, ...)
     end)
     setreadonly(mt, true)
@@ -352,7 +320,7 @@ TrackConn(UIS.InputBegan:Connect(function(i, gp)
     if not gp and (i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch) then
         isShooting = true
         shotOffset = NewShotOffset()
-        pickCache.t = 0 -- преварм цели на новом выстреле
+        pickCache.t = 0
     end
 end))
 TrackConn(UIS.InputEnded:Connect(function(i, gp)
@@ -361,9 +329,25 @@ TrackConn(UIS.InputEnded:Connect(function(i, gp)
     end
 end))
 
+-- Reset на респавн/смерть — иначе зависает isShooting
+local function resetCombatState()
+    isShooting = false
+    silentTarget = nil
+    aimSmoothPos = nil
+    pickCache.head = nil
+    pickCache.t = 0
+end
+TrackConn(LP.CharacterAdded:Connect(resetCombatState))
+TrackConn(LP.CharacterRemoving:Connect(resetCombatState))
+if LP.Character then
+    local hum = LP.Character:FindFirstChildOfClass("Humanoid")
+    if hum then
+        TrackConn(hum.Died:Connect(resetCombatState))
+    end
+end
+
 -- ═══════════════ AIM UPDATE ═══════════════
 local fovLastRadius = nil
-local fovColorDirty = false
 local function UpdateAim(dt)
     if not C.Silent or not isShooting then
         silentTarget = nil; aimSmoothPos = nil
@@ -389,7 +373,6 @@ local function UpdateAim(dt)
             SilentLine.Visible = true
         else SilentLine.Visible = false end
     end
-    -- FOV circle — обновляем позицию центра каждый кадр, радиус только при смене
     FOVCircle.Position = Vector2.new(Camera.ViewportSize.X * 0.5, Camera.ViewportSize.Y * 0.5)
     local r = FovPx()
     if not fovLastRadius or math.abs(fovLastRadius - r) > 0.5 then
@@ -401,7 +384,6 @@ end
 
 -- ═══════════════ ESP ═══════════════
 local ESP = {}
-
 local BONE_PAIRS = {
     {"Head","UpperTorso"},{"UpperTorso","LowerTorso"},
     {"UpperTorso","LeftUpperArm"},{"LeftUpperArm","LeftLowerArm"},{"LeftLowerArm","LeftHand"},
@@ -948,8 +930,6 @@ local TP = Window:CreateTab("Teleport")
 local Settings = Window:CreateTab("Settings")
 
 Combat:CreateToggle({ Name = "Silent Aim", CurrentValue = C.Silent, Flag = "silent", Callback = function(v) C.Silent = v end })
-Combat:CreateToggle({ Name = "Hook Camera Ray (ViewportPointToRay)", CurrentValue = C.HookViewportRay, Flag = "hookcam", Callback = function(v) C.HookViewportRay = v end })
-Combat:CreateToggle({ Name = "Hook Workspace Raycast", CurrentValue = C.HookWorkspaceRay, Flag = "hookws", Callback = function(v) C.HookWorkspaceRay = v end })
 Combat:CreateSlider({ Name = "FOV %", Range = {5, 100}, Increment = 1, Suffix = "%", CurrentValue = C.FOVPercent, Flag = "fov", Callback = function(v) C.FOVPercent = v end })
 Combat:CreateSlider({ Name = "Max Distance", Range = {500, 5000}, Increment = 100, Suffix = "m", CurrentValue = C.MaxDist, Flag = "maxdist", Callback = function(v) C.MaxDist = v end })
 Combat:CreateSlider({ Name = "Prediction X (x10)", Range = {5, 30}, Increment = 1, CurrentValue = math.floor(C.Prediction * 10), Flag = "predx", Callback = function(v) C.Prediction = v / 10 end })
@@ -1011,15 +991,15 @@ local chAccum,  CH_INTERVAL  = 0, 1 / 30
 
 TrackConn(RunService.RenderStepped:Connect(function(dt)
     if getgenv().MeowModUnloaded then return end
-    UpdateAim(dt)
+    pcall(function() UpdateAim(dt) end)
     espAccum = espAccum + dt
-    if espAccum >= ESP_INTERVAL then espAccum = 0; UpdateESP() end
+    if espAccum >= ESP_INTERVAL then espAccum = 0; pcall(UpdateESP) end
     vehAccum = vehAccum + dt
-    if vehAccum >= VEH_INTERVAL then vehAccum = 0; UpdateVehicleESP() end
+    if vehAccum >= VEH_INTERVAL then vehAccum = 0; pcall(UpdateVehicleESP) end
     chAccum = chAccum + dt
-    if chAccum >= CH_INTERVAL then chAccum = 0; UpdateCrosshair() end
+    if chAccum >= CH_INTERVAL then chAccum = 0; pcall(UpdateCrosshair) end
     if Hitmarker.Visible and tick() > hitmarkerUntil then Hitmarker.Visible = false end
-    if C.HitboxExp then ApplyHitbox() end
+    if C.HitboxExp then pcall(ApplyHitbox) end
 end))
 
 -- ═══════════════ FULL UNLOAD ═══════════════
@@ -1057,7 +1037,7 @@ getgenv().MeowModUnload = function()
 end
 
 Rayfield:Notify({
-    Title = "MeowMod V4.5",
-    Content = "Silent aim fixed. FOV lag gone.",
+    Title = "MeowMod V4.6",
+    Content = "No-crash build. Raycast hook removed.",
     Duration = 5,
 })
